@@ -1,34 +1,52 @@
+use std::time::{Duration, Instant};
+
 use crate::node::Effect;
 
 pub struct Ramp {
     target: f32,
     start: f32,
-    duration_ms: u64,
+    duration: Duration,
     start_time: Option<std::time::Instant>,
 }
 
 impl Ramp {
-    pub fn new(start: f32, target: f32, duration_ms: u64) -> Self {
+    pub fn new(start: f32, target: f32, duration: Duration) -> Self {
         Self {
             target,
             start, // This should be set to the current gain when ramp starts
-            duration_ms,
+            duration,
             start_time: None,
         }
     }
 
-    pub fn start(&mut self) {
-        self.start_time = Some(std::time::Instant::now());
+    pub fn is_active(&self, now: Instant) -> bool {
+        if let Some(start_time) = self.start_time {
+            return start_time < now;
+        }
+        false
     }
 
-    pub fn update(&mut self) -> f32 {
+    pub fn start(&mut self, at: Instant) {
+        self.start_time = Some(at);
+    }
+
+    pub fn update(&mut self, now: Instant) -> Option<f32> {
         let Some(start_time) = self.start_time else {
-            return self.start; // Ramp hasn't started yet
+            return None; // Ramp hasn't started yet
         };
-        let now = std::time::Instant::now();
+        if start_time >= now {
+            return None;
+        }
         let delta_time = now - start_time;
-        self.start
-            + (self.target - self.start) * (delta_time.as_millis() as f32 / self.duration_ms as f32)
+        if delta_time >= self.duration {
+            self.start_time = None;
+            return Some(self.target);
+        }
+        Some(
+            self.start
+                + (self.target - self.start)
+                    * (delta_time.as_millis() as f32 / self.duration.as_millis() as f32),
+        )
     }
 }
 
@@ -51,5 +69,73 @@ impl Default for Gain {
 impl Effect for Gain {
     fn process(&mut self, input: f32) -> f32 {
         self.gain * input
+    }
+}
+
+pub struct ADSR {
+    attack: Ramp,
+    decay: Ramp,
+    sustain: f32,
+    release: Ramp,
+    start_time: Option<std::time::Instant>,
+    stop_time: Option<std::time::Instant>,
+}
+
+impl ADSR {
+    pub fn new(attack: Duration, decay: Duration, sustain: f32, release: Duration) -> Self {
+        Self {
+            attack: Ramp::new(0.0, 1.0, attack),
+            decay: Ramp::new(1.0, sustain, decay),
+            sustain,
+            release: Ramp::new(sustain, 0.0, release),
+            start_time: None,
+            stop_time: None,
+        }
+    }
+
+    pub fn update(&mut self) -> Option<f32> {
+        let now = Instant::now();
+        if let Some(start_time) = self.start_time {
+            if start_time > now {
+                return None; // Note hasn't started yet
+            }
+            if self.attack.is_active(now) {
+                println!("{:?}: Attack active", now);
+                return self.attack.update(now);
+            }
+            if self.decay.is_active(now) {
+                println!("{:?}: Decay active", now);
+                return self.decay.update(now);
+            }
+            println!("{:?}: Sustain active", now);
+            return Some(self.sustain);
+        }
+        if let Some(stop_time) = self.stop_time {
+            if stop_time > now {
+                return None; // Note hasn't stopped yet
+            }
+            if self.release.is_active(now) {
+                println!("{:?}: Release active", now);
+                return self.release.update(now);
+            }
+            self.stop_time = None;
+        }
+        None
+    }
+
+    pub fn start(&mut self) {
+        let now = Instant::now();
+        println!("{:?}: Note started", now);
+        self.start_time = Some(now);
+        self.attack.start(now);
+        self.decay.start(now + self.attack.duration);
+    }
+
+    pub fn stop(&mut self) {
+        let now = Instant::now();
+        self.start_time = None;
+        println!("{:?}: Note stopped", now);
+        self.stop_time = Some(now);
+        self.release.start(now);
     }
 }
