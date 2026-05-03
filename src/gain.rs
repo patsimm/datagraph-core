@@ -93,21 +93,17 @@ impl ADSR {
         }
     }
 
-    pub fn update(&mut self) -> Option<f32> {
-        let now = Instant::now();
+    pub fn update(&mut self, now: Instant) -> Option<f32> {
         if let Some(start_time) = self.start_time {
             if start_time > now {
                 return None; // Note hasn't started yet
             }
             if self.attack.is_active(now) {
-                println!("{:?}: Attack active", now);
                 return self.attack.update(now);
             }
             if self.decay.is_active(now) {
-                println!("{:?}: Decay active", now);
                 return self.decay.update(now);
             }
-            println!("{:?}: Sustain active", now);
             return Some(self.sustain);
         }
         if let Some(stop_time) = self.stop_time {
@@ -115,7 +111,6 @@ impl ADSR {
                 return None; // Note hasn't stopped yet
             }
             if self.release.is_active(now) {
-                println!("{:?}: Release active", now);
                 return self.release.update(now);
             }
             self.stop_time = None;
@@ -125,7 +120,6 @@ impl ADSR {
 
     pub fn start(&mut self) {
         let now = Instant::now();
-        println!("{:?}: Note started", now);
         self.start_time = Some(now);
         self.attack.start(now);
         self.decay.start(now + self.attack.duration);
@@ -134,7 +128,6 @@ impl ADSR {
     pub fn stop(&mut self) {
         let now = Instant::now();
         self.start_time = None;
-        println!("{:?}: Note stopped", now);
         self.stop_time = Some(now);
         self.release.start(now);
     }
