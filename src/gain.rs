@@ -18,7 +18,7 @@ impl Ramp {
     pub fn new(start: f32, target: f32, duration: usize) -> Self {
         Self {
             target,
-            start, // This should be set to the current gain when ramp starts
+            start,
             duration,
             start_sample: None,
         }

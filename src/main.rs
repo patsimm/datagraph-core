@@ -14,6 +14,7 @@ mod gain;
 mod helpers;
 mod node;
 mod oscillator;
+mod ring_buffer;
 
 fn main() {
     let host = cpal::default_host();
@@ -40,7 +41,7 @@ fn main() {
 
     gain.set_gain(0.0);
 
-    let event_buffer = Arc::new(event_buffer::EventBuffer::<16>::new());
+    let event_buffer = Arc::new(event_buffer::EventBuffer::new());
     let event_buffer_clone = event_buffer.clone();
 
     let mut i = 0;
