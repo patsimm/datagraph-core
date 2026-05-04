@@ -23,6 +23,14 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
         self
     }
 
+    pub fn drain(&self) -> Vec<T> {
+        let mut events = Vec::new();
+        while let Some(event) = self.pop() {
+            events.push(event);
+        }
+        events
+    }
+
     pub fn push(&self, event: T) -> Result<(), ()> {
         let write_index = self.write_index.load(std::sync::atomic::Ordering::Relaxed);
         let next_write_index = (write_index + 1) % self.events.len();

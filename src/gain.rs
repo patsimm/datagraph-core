@@ -3,77 +3,18 @@ use std::time::Duration;
 use cpal::SampleRate;
 
 use crate::{
-    helpers::{ToSamples, lerp},
+    helpers::ToSamples,
     node::Effect,
+    param::{Param, Ramp},
 };
 
-pub struct Ramp {
-    target: f32,
-    start: f32,
-    duration: usize,
-    start_sample: Option<usize>,
-}
-
-impl Ramp {
-    pub fn new(start: f32, target: f32, duration: usize) -> Self {
-        Self {
-            target,
-            start,
-            duration,
-            start_sample: None,
-        }
-    }
-
-    pub fn is_active(&self, sample_num: usize) -> bool {
-        if let Some(start_sample) = self.start_sample {
-            return start_sample <= sample_num;
-        }
-        false
-    }
-
-    pub fn start(&mut self, at: usize) {
-        self.start_sample = Some(at);
-    }
-
-    pub fn update(&mut self, now: usize) -> Option<f32> {
-        let Some(start_time) = self.start_sample else {
-            return None; // Ramp hasn't started yet
-        };
-        if start_time >= now {
-            return None;
-        }
-        let delta_samples = now - start_time;
-        if delta_samples >= self.duration {
-            self.start_sample = None;
-            return Some(self.target);
-        }
-        Some(lerp(
-            self.start,
-            self.target,
-            delta_samples as f32 / self.duration as f32,
-        ))
-    }
-}
-
 pub struct Gain {
-    gain: f32,
-}
-
-impl Gain {
-    pub fn set_gain(&mut self, gain: f32) {
-        self.gain = gain;
-    }
-}
-
-impl Default for Gain {
-    fn default() -> Self {
-        Self { gain: 1.0 }
-    }
+    pub param: Param,
 }
 
 impl Effect for Gain {
-    fn process(&mut self, input: f32, _: usize) -> f32 {
-        self.gain * input
+    fn process(&mut self, input: f32, sample_num: usize) -> f32 {
+        self.param.get(sample_num) * input
     }
 }
 
@@ -104,40 +45,46 @@ impl ADSR {
         }
     }
 
-    pub fn update(&mut self, sample_num: usize) -> Option<f32> {
+    pub fn gain(&mut self, sample_num: usize) -> f32 {
         if let Some(start_time) = self.start_time {
             if start_time > sample_num {
-                return None; // Note hasn't started yet
+                return 0.0; // Note hasn't started yet
             }
             if self.attack.is_active(sample_num) {
-                return self.attack.update(sample_num);
+                return self.attack.update(sample_num).unwrap_or_default();
             }
             if self.decay.is_active(sample_num) {
-                return self.decay.update(sample_num);
+                return self.decay.update(sample_num).unwrap_or_default();
             }
-            return Some(self.sustain);
+            return self.sustain;
         }
         if let Some(stop_time) = self.stop_time {
-            if stop_time > sample_num {
-                return None; // Note hasn't stopped yet
+            if stop_time >= sample_num {
+                return self.sustain; // Note hasn't stopped yet
             }
             if self.release.is_active(sample_num) {
-                return self.release.update(sample_num);
+                return self.release.update(sample_num).unwrap_or_default();
             }
             self.stop_time = None;
         }
-        None
+        0.0
     }
 
     pub fn start(&mut self, sample_num: usize) {
         self.start_time = Some(sample_num);
         self.attack.start(sample_num);
-        self.decay.start(sample_num + self.attack.duration);
+        self.decay.start(sample_num + self.attack.duration());
     }
 
     pub fn stop(&mut self, sample_num: usize) {
-        self.start_time = None;
         self.stop_time = Some(sample_num);
         self.release.start(sample_num);
+        self.start_time = None;
+    }
+}
+
+impl Effect for ADSR {
+    fn process(&mut self, input: f32, sample_num: usize) -> f32 {
+        input * self.gain(sample_num)
     }
 }

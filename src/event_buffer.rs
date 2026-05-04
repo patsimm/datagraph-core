@@ -2,7 +2,7 @@ use crate::ring_buffer::RingBuffer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Event {
-    NoteOn,
+    NoteOn { frequency: f32 },
     NoteOff,
 }
 
