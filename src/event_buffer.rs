@@ -5,8 +5,8 @@ use std::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum Event {
-    NoteOn { note: u8, velocity: f32 },
-    NoteOff { note: u8 },
+    NoteOn,
+    NoteOff,
 }
 
 pub struct EventBuffer<const N: usize> {

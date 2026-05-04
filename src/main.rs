@@ -1,18 +1,17 @@
 use core::f32;
-use std::{
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
+    helpers::FromHz,
     node::{Effect, Source},
     oscillator::Oscillator,
 };
 
 mod event_buffer;
 mod gain;
+mod helpers;
 mod node;
 mod oscillator;
 
@@ -29,43 +28,44 @@ fn main() {
     let config = device.default_output_config().unwrap();
     println!("Default output config: {:?}", config);
 
-    let mut osc = Oscillator::new(440.0, config.sample_rate());
+    let mut osc = Oscillator::new(Duration::from_hz(220.0), config.sample_rate());
     let mut gain = gain::Gain::default();
     let mut adsr = gain::ADSR::new(
-        std::time::Duration::from_millis(100),
-        std::time::Duration::from_millis(50),
+        config.sample_rate(),
+        std::time::Duration::from_millis(20),
+        std::time::Duration::from_millis(20),
         0.7,
-        std::time::Duration::from_millis(100),
+        std::time::Duration::from_millis(50),
     );
 
     gain.set_gain(0.0);
-    let time_per_sample = Duration::from_secs_f32(1.0 / config.sample_rate() as f32);
 
     let event_buffer = Arc::new(event_buffer::EventBuffer::<16>::new());
     let event_buffer_clone = event_buffer.clone();
+
+    let mut i = 0;
 
     let stream = device
         .build_output_stream(
             &config.into(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                let now = Instant::now();
-
                 while let Some(event) = event_buffer.clone().pop() {
                     match event {
-                        event_buffer::Event::NoteOn { note, velocity } => {
-                            adsr.start();
+                        event_buffer::Event::NoteOn => {
+                            adsr.start(i + 1);
                         }
-                        event_buffer::Event::NoteOff { note: _ } => {
-                            adsr.stop();
+                        event_buffer::Event::NoteOff => {
+                            adsr.stop(i + 1);
                         }
                     }
                 }
 
-                for (i, sample) in data.iter_mut().enumerate() {
-                    if let Some(new_val) = adsr.update(now + time_per_sample * i as u32) {
+                for sample in data.iter_mut() {
+                    i += 1;
+                    if let Some(new_val) = adsr.update(i) {
                         gain.set_gain(new_val);
                     }
-                    *sample = gain.process(osc.output());
+                    *sample = gain.process(osc.output(i), i);
                 }
             },
             move |err| {
@@ -78,12 +78,13 @@ fn main() {
     stream.play().unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    event_buffer_clone.push(event_buffer::Event::NoteOn {
-        note: 60,
-        velocity: 1.0,
-    });
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    event_buffer_clone.push(event_buffer::Event::NoteOff { note: 60 });
 
-    std::thread::sleep(std::time::Duration::from_millis(10000));
+    for _ in 0..16 {
+        event_buffer_clone.push(event_buffer::Event::NoteOn);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        event_buffer_clone.push(event_buffer::Event::NoteOff);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(1000));
 }

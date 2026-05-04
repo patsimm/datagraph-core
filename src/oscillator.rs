@@ -1,21 +1,18 @@
 use core::f32;
+use std::time::Duration;
 
 use cpal::SampleRate;
 
-use crate::node::Source;
+use crate::{helpers::ToSamples, node::Source};
 
 pub struct Oscillator {
-    current_sample: usize,
-    sample_rate: SampleRate,
-    frequency: f32,
+    samples_per_cycle: f32,
 }
 
 impl Oscillator {
-    pub fn new(frequency: f32, sample_rate: SampleRate) -> Self {
+    pub fn new(frequency: Duration, sample_rate: SampleRate) -> Self {
         Self {
-            frequency,
-            sample_rate,
-            current_sample: 0,
+            samples_per_cycle: frequency.to_samples(sample_rate) as f32,
         }
     }
 }
@@ -26,10 +23,7 @@ impl Source for Oscillator {
     // val(t) = sin(pi * frequency * t)
     // t = sample_index / sample_rate
     // val(sample_index) = sin(pi * frequency * sample_index / sample_rate)
-    fn output(&mut self) -> f32 {
-        self.current_sample += 1;
-        f32::sin(
-            f32::consts::PI * self.frequency * self.current_sample as f32 / self.sample_rate as f32,
-        )
+    fn output(&mut self, sample_num: usize) -> f32 {
+        f32::sin(f32::consts::PI * (sample_num as f32 / self.samples_per_cycle))
     }
 }
