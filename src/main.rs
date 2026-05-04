@@ -9,6 +9,7 @@ use crate::{
     oscillator::Oscillator,
 };
 
+mod delay;
 mod event_buffer;
 mod gain;
 mod helpers;
@@ -38,6 +39,7 @@ fn main() {
         0.7,
         std::time::Duration::from_millis(50),
     );
+    let mut delay = delay::Delay::new();
 
     gain.set_gain(0.0);
 
@@ -66,7 +68,7 @@ fn main() {
                     if let Some(new_val) = adsr.update(i) {
                         gain.set_gain(new_val);
                     }
-                    *sample = gain.process(osc.output(i), i);
+                    *sample = delay.process(gain.process(osc.output(i), i), i);
                 }
             },
             move |err| {
@@ -79,7 +81,6 @@ fn main() {
     stream.play().unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
-
     for _ in 0..16 {
         event_buffer_clone.push(event_buffer::Event::NoteOn);
         std::thread::sleep(std::time::Duration::from_millis(100));

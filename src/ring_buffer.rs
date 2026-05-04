@@ -18,19 +18,24 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
         }
     }
 
-    pub fn push(&self, event: T) -> bool {
+    pub fn flooded(self, val: T) -> Self {
+        while self.push(val).is_ok() {}
+        self
+    }
+
+    pub fn push(&self, event: T) -> Result<(), ()> {
         let write_index = self.write_index.load(std::sync::atomic::Ordering::Relaxed);
         let next_write_index = (write_index + 1) % self.events.len();
 
         if next_write_index == self.read_index.load(std::sync::atomic::Ordering::Acquire) {
-            return false;
+            return Err(()); // Buffer is full
         }
 
         unsafe { *self.events[write_index].get() = Some(event) };
 
         self.write_index
             .store(next_write_index, std::sync::atomic::Ordering::Release);
-        true
+        Ok(())
     }
 
     pub fn pop(&self) -> Option<T> {
