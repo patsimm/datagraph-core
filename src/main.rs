@@ -1,20 +1,23 @@
 use core::f32;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
-    helpers::FromHz,
+    frequency::{Frequency, FromHz},
     node::{Effect, Source},
+    note::Note,
     oscillator::Oscillator,
     param::Param,
 };
 
 mod delay;
 mod event_buffer;
+mod frequency;
 mod gain;
 mod helpers;
 mod node;
+mod note;
 mod oscillator;
 mod param;
 mod ring_buffer;
@@ -33,7 +36,7 @@ fn main() {
     let config = device.default_output_config().unwrap();
     println!("Default output config: {:?}", config);
 
-    let mut osc = Oscillator::new(Duration::from_hz(220.0), config.sample_rate());
+    let mut osc = Oscillator::new(Frequency::from_hz(220.0), config.sample_rate());
     let mut adsr = gain::ADSR::new(
         config.sample_rate(),
         std::time::Duration::from_millis(50),
@@ -83,7 +86,7 @@ fn main() {
 
                 for sample in data.iter_mut() {
                     i += 1;
-                    *sample = delay.process(adsr.process(osc.output(i), i), i);
+                    *sample = gain.process(delay.process(adsr.process(osc.output(i), i), i), i)
                 }
             },
             move |err| {
@@ -95,18 +98,20 @@ fn main() {
 
     stream.play().unwrap();
 
+    let notes = &["C4", "D4", "E4", "D4"];
+
     std::thread::sleep(std::time::Duration::from_millis(1000));
     for i in 0..16 {
         event_buffer_clone
             .push(event_buffer::Event::NoteOn {
-                frequency: Duration::from_hz(i as f32 * 220.0 / 8.0 + 110.0).as_secs_f32(),
+                frequency: *Note::from(notes[i % notes.len()]).midi().to_frequency(),
             })
             .expect("Failed to push event");
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(200));
         event_buffer_clone
             .push(event_buffer::Event::NoteOff)
             .expect("Failed to push event");
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
