@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::frequency::{Frequency, FromHz};
+use crate::frequency::Frequency;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[rustfmt::skip]
@@ -58,16 +58,6 @@ impl Note {
 pub struct MidiNote(u8);
 
 impl MidiNote {
-    pub fn to_frequency(self) -> Frequency {
-        // A4 is 440Hz and is note number 69
-        let a4_freq = 440.0;
-        let a4_note_num = 69.0;
-        let semitone_ratio = 2f32.powf(1.0 / 12.0);
-        let note_num = self.0 as f32;
-        let freq = a4_freq * semitone_ratio.powf(note_num - a4_note_num);
-        Frequency::from_hz(freq)
-    }
-
     pub fn to_note(self) -> Option<Note> {
         let index = self.0 as usize - 12;
         if index < ALL_NOTES.len() {
@@ -83,17 +73,6 @@ impl Deref for MidiNote {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl From<Frequency> for MidiNote {
-    fn from(freq: Frequency) -> Self {
-        // A4 is 440Hz and is note number 69
-        let a4_freq = 440.0;
-        let a4_note_num = 69.0;
-        let semitone_ratio = 2f32.powf(1.0 / 12.0);
-        let note_num = (*freq / a4_freq).log(semitone_ratio) + a4_note_num;
-        Self(note_num.round() as u8)
     }
 }
 
@@ -115,46 +94,35 @@ impl From<Note> for MidiNote {
 
 #[cfg(test)]
 mod tests {
+    use crate::frequency::FromHz;
+
     use super::*;
 
     #[test]
     fn midi_0_is_frequency_8_18hz() {
         let note = MidiNote(0);
-        let result = note.to_frequency();
+        let result: Frequency = note.into();
         assert_eq!(8.175773, *result);
     }
 
     #[test]
     fn midi_69_is_frequency_440hz() {
         let note = MidiNote(69);
-        let result = note.to_frequency();
+        let result: Frequency = note.into();
         assert_eq!(440.0, *result);
     }
 
     #[test]
     fn midi_127_is_frequency_12543hz() {
-        let note = MidiNote(127);
-        let result = note.to_frequency();
-        assert_eq!(12543.888, *result);
+        let note: Frequency = MidiNote(127).into();
+        assert_eq!(12543.888, *note);
     }
 
     #[test]
     fn midi_60_is_frequency_261hz() {
         let note: MidiNote = 60.into();
-        let result = note.to_frequency();
+        let result: Frequency = note.into();
         assert_eq!(261.62546, *result);
-    }
-
-    #[test]
-    fn frequency_440hz_is_note_69() {
-        let result: MidiNote = Frequency::from_hz(440.0).into();
-        assert_eq!(69, *result);
-    }
-
-    #[test]
-    fn frequency_261hz_is_note_60() {
-        let result: MidiNote = Frequency::from_hz(261.62546).into();
-        assert_eq!(60, *result);
     }
 
     #[test]
