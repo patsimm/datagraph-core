@@ -2,19 +2,15 @@ use std::time::Duration;
 
 use cpal::SampleRate;
 
-use crate::{
-    helpers::ToSamples,
-    node::Effect,
-    param::{Param, Ramp},
-};
+use crate::{graph::Node, helpers::ToSamples, param::Ramp};
 
-pub struct Gain {
-    pub param: Param,
-}
+pub struct Gain;
 
-impl Effect for Gain {
-    fn process(&mut self, input: f32, sample_num: usize) -> f32 {
-        self.param.get(sample_num) * input
+impl Node<2, 1> for Gain {
+    const INPUT_NAMES: [&'static str; 2] = ["input", "gain"];
+    const OUTPUT_NAMES: [&'static str; 1] = ["output"];
+    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
+        [input[1] * input[0]]
     }
 }
 
@@ -70,21 +66,33 @@ impl ADSR {
         0.0
     }
 
-    pub fn start(&mut self, sample_num: usize) {
+    fn start(&mut self, sample_num: usize) {
         self.start_time = Some(sample_num);
         self.attack.start(sample_num);
         self.decay.start(sample_num + self.attack.duration());
     }
 
-    pub fn stop(&mut self, sample_num: usize) {
+    fn stop(&mut self, sample_num: usize) {
         self.stop_time = Some(sample_num);
         self.release.start(sample_num);
         self.start_time = None;
     }
 }
 
-impl Effect for ADSR {
-    fn process(&mut self, input: f32, sample_num: usize) -> f32 {
-        input * self.gain(sample_num)
+impl Node<1, 1> for ADSR {
+    const INPUT_NAMES: [&'static str; 1] = ["gate"];
+    const OUTPUT_NAMES: [&'static str; 1] = ["envelope"];
+    fn process(&mut self, input: [f32; 1], sample_num: usize) -> [f32; 1] {
+        let gate = input[0];
+
+        let is_on = gate > 0.5;
+        if is_on && self.start_time.is_none() {
+            self.start(sample_num);
+        }
+        if !is_on && self.start_time.is_some() && self.stop_time.is_none() {
+            self.stop(sample_num);
+        }
+
+        [self.gain(sample_num)]
     }
 }

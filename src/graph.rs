@@ -1,12 +1,14 @@
-use std::{ops::Deref, sync::Arc};
-
-use crate::helpers::AtomicF32;
+use std::ops::Deref;
 
 pub trait Node<const IN: usize, const OUT: usize> {
+    const INPUT_NAMES: [&'static str; IN];
+    const OUTPUT_NAMES: [&'static str; OUT];
     fn process(&mut self, input: [f32; IN], sample_num: usize) -> [f32; OUT];
 }
 
 pub trait DynNode: Send {
+    fn input_names(&self) -> &[&'static str];
+    fn output_names(&self) -> &[&'static str];
     fn process(&mut self, input: &[f32], sample_num: usize) -> Vec<f32>;
 }
 
@@ -15,6 +17,12 @@ struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T
 impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     for DynNodeWrapper<IN, OUT, T>
 {
+    fn input_names(&self) -> &[&'static str] {
+        &T::INPUT_NAMES
+    }
+    fn output_names(&self) -> &[&'static str] {
+        &T::OUTPUT_NAMES
+    }
     fn process(&mut self, input: &[f32], sample_num: usize) -> Vec<f32> {
         let mut in_array = [0.0; IN];
         in_array.copy_from_slice(&input[0..IN]);
@@ -25,18 +33,17 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
 
 struct GraphNode {
     inputs: usize,
-    outputs: usize,
     node: Box<dyn DynNode>,
     output_cache: Vec<f32>,
 }
 
 impl GraphNode {
-    fn new<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send + 'static>(
-        node: T,
-    ) -> GraphNode {
+    fn new<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
+    where
+        T: Node<IN, OUT> + Send + 'static,
+    {
         GraphNode {
             inputs: IN,
-            outputs: OUT,
             node: Box::new(DynNodeWrapper::<IN, OUT, T>(node)),
             output_cache: vec![0.0; OUT],
         }
@@ -112,18 +119,10 @@ impl Graph {
     }
 }
 
-pub struct Constant {
-    pub value: Arc<AtomicF32>,
-}
-
-impl Node<0, 1> for Constant {
-    fn process(&mut self, _: [f32; 0], _: usize) -> [f32; 1] {
-        [self.value.load(std::sync::atomic::Ordering::Relaxed)]
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::param::Param;
+
     use super::*;
 
     struct Adder {
@@ -131,6 +130,8 @@ mod tests {
     }
 
     impl Node<1, 1> for Adder {
+        const INPUT_NAMES: [&'static str; 1] = ["input"];
+        const OUTPUT_NAMES: [&'static str; 1] = ["output"];
         fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
             [input[0] + self.value]
         }
@@ -138,29 +139,23 @@ mod tests {
 
     #[test]
     fn constant_outputs_constant() {
-        let mut constant = Constant {
-            value: Arc::new(AtomicF32::new(0.5)),
-        };
-        let output = constant.process([], 0);
+        let param: Param = 0.5.into();
+        let output = param.node().process([], 0);
         assert_eq!(output, [0.5]);
     }
 
     #[test]
     fn adder_adds_value() {
-        let mut constant = Constant {
-            value: Arc::new(AtomicF32::new(0.5)),
-        };
+        let param: Param = 0.5.into();
         let mut adder = Adder { value: 0.25 };
-        let output = adder.process(constant.process([], 0), 0);
+        let output = adder.process(param.node().process([], 0), 0);
         assert_eq!(output, [0.75]);
     }
 
     #[test]
     fn graph_adds_nodes() {
         let mut graph = Graph::new();
-        let constant_id = graph.add_node(Constant {
-            value: Arc::new(AtomicF32::new(0.5)),
-        });
+        let constant_id = graph.add_node(Param::from(0.5).node());
         let adder_id = graph.add_node(Adder { value: 0.25 });
         assert_eq!(constant_id.0, 0);
         assert_eq!(adder_id.0, 1);
@@ -169,9 +164,7 @@ mod tests {
     #[test]
     fn graph_connects_nodes() {
         let mut graph = Graph::new();
-        let constant_id = graph.add_node(Constant {
-            value: Arc::new(AtomicF32::new(0.5)),
-        });
+        let constant_id = graph.add_node(Param::from(0.5).node());
         let adder_id = graph.add_node(Adder { value: 0.25 });
         graph.connect(constant_id, 0, adder_id, 0);
         graph.tick(0);

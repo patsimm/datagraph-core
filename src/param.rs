@@ -1,37 +1,52 @@
-use crate::helpers::lerp;
+use std::sync::Arc;
 
-#[derive(Default)]
+use crate::{
+    graph::Node,
+    helpers::{AtomicF32, lerp},
+};
+
 pub struct Param {
-    value: f32,
-    ramp: Option<Ramp>,
-}
-
-impl Param {
-    pub fn set(&mut self, value: f32) {
-        self.value = value;
-        self.ramp = None; // Cancel any active ramp
-    }
-
-    pub fn get(&mut self, sample_num: usize) -> f32 {
-        let Some(ramp) = &mut self.ramp else {
-            return self.value;
-        };
-        if !ramp.is_active(sample_num) {
-            return self.value;
-        }
-        let Some(new_value) = ramp.update(sample_num) else {
-            self.value = ramp.target;
-            self.ramp = None;
-            return self.value;
-        };
-        self.value = new_value;
-        self.value
-    }
+    value: Arc<AtomicF32>,
 }
 
 impl From<f32> for Param {
     fn from(value: f32) -> Self {
-        Self { value, ramp: None }
+        Self {
+            value: Arc::new(AtomicF32::new(value)),
+        }
+    }
+}
+
+impl Param {
+    pub fn new(value: f32) -> Self {
+        Self {
+            value: Arc::new(AtomicF32::new(value)),
+        }
+    }
+
+    pub fn node(&self) -> ParamNode {
+        ParamNode(self.value.clone())
+    }
+
+    pub fn set(&mut self, value: f32) {
+        self.value
+            .store(value, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+pub struct ParamNode(Arc<AtomicF32>);
+
+impl From<&Param> for ParamNode {
+    fn from(param: &Param) -> Self {
+        param.node()
+    }
+}
+
+impl Node<0, 1> for ParamNode {
+    const INPUT_NAMES: [&'static str; 0] = [];
+    const OUTPUT_NAMES: [&'static str; 1] = ["value"];
+    fn process(&mut self, _: [f32; 0], _: usize) -> [f32; 1] {
+        [self.0.load(std::sync::atomic::Ordering::Relaxed)]
     }
 }
 
