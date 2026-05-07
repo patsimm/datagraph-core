@@ -45,6 +45,7 @@ impl From<&Param> for ParamNode {
 }
 
 impl Node<0, 1> for ParamNode {
+    const NODE_TYPE: crate::graph::NodeType = crate::graph::NodeType::Param;
     const INPUT_NAMES: [&'static str; 0] = [];
     const OUTPUT_NAMES: [&'static str; 1] = ["value"];
     fn process(&mut self, _: [f32; 0], _: usize) -> [f32; 1] {

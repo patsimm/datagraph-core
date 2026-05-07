@@ -40,23 +40,37 @@ fn main() {
     let mut graph = Graph::new();
     let freq_node = graph.add(freq.node());
     let osc_node = graph.add(osc);
-    graph.connect(freq_node, 0, osc_node, 0);
+    graph
+        .connect(freq_node, 0, osc_node, 0)
+        .expect("Failed to connect frequency to oscillator");
 
     let adsr_gate_node = graph.add(adsr_gate.node());
     let adsr_node = graph.add(adsr);
     let adsr_gain = graph.add(Gain);
-    graph.connect(adsr_gate_node, 0, adsr_node, 0);
-    graph.connect(adsr_node, 0, adsr_gain, 1);
+    graph
+        .connect(adsr_gate_node, 0, adsr_node, 0)
+        .expect("Failed to connect ADSR gate to ADSR");
+    graph
+        .connect(adsr_node, 0, adsr_gain, 1)
+        .expect("Failed to connect ADSR to ADSR gain");
 
     let delay_node = graph.add(delay);
 
     let gain_value = graph.add(Param::new(0.5).node());
     let gain_node = graph.add(gain);
-    graph.connect(gain_value, 0, gain_node, 1);
+    graph
+        .connect(gain_value, 0, gain_node, 1)
+        .expect("Failed to connect gain value to gain node");
 
-    graph.connect(osc_node, 0, adsr_gain, 0);
-    graph.connect(adsr_gain, 0, delay_node, 0);
-    graph.connect(delay_node, 0, gain_node, 0);
+    graph
+        .connect(osc_node, 0, adsr_gain, 0)
+        .expect("Failed to connect oscillator to ADSR gain");
+    graph
+        .connect(adsr_gain, 0, delay_node, 0)
+        .expect("Failed to connect ADSR gain to delay");
+    graph
+        .connect(delay_node, 0, gain_node, 0)
+        .expect("Failed to connect delay to gain");
 
     // let samples = (0..44100 * 5)
     //     .map(|i| {

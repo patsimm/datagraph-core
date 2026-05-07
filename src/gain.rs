@@ -7,6 +7,7 @@ use crate::{graph::Node, helpers::ToSamples, param::Ramp};
 pub struct Gain;
 
 impl Node<2, 1> for Gain {
+    const NODE_TYPE: crate::graph::NodeType = crate::graph::NodeType::Gain;
     const INPUT_NAMES: [&'static str; 2] = ["input", "gain"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
     fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
@@ -80,6 +81,7 @@ impl ADSR {
 }
 
 impl Node<1, 1> for ADSR {
+    const NODE_TYPE: crate::graph::NodeType = crate::graph::NodeType::ADSR;
     const INPUT_NAMES: [&'static str; 1] = ["gate"];
     const OUTPUT_NAMES: [&'static str; 1] = ["envelope"];
     fn process(&mut self, input: [f32; 1], sample_num: usize) -> [f32; 1] {

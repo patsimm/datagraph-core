@@ -13,7 +13,7 @@ build:
       'let cachedTextDecoder = null;' \
     ).replace( \
       'function decodeText(ptr, len) {', \
-      'function decodeText(ptr, len) {\n    if (cachedTextDecoder === null) { cachedTextDecoder = new TextDecoder(\'utf-8\', { ignoreBOM: true, fatal: true }); cachedTextDecoder.decode(); }' \
+      'function decodeText(ptr, len) {\n    if (typeof TextDecoder === \'undefined\') { return Array.from(getUint8ArrayMemory0().subarray(ptr, ptr + len)).map(b => String.fromCharCode(b)).join(\'\'); }\n    if (cachedTextDecoder === null) { cachedTextDecoder = new TextDecoder(\'utf-8\', { ignoreBOM: true, fatal: true }); cachedTextDecoder.decode(); }' \
     ); \
     fs.writeFileSync('pkg/datagraph.js', js); \
   "

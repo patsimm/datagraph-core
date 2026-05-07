@@ -1,1 +1,5 @@
 /target
+output.wav
+
+# MacOS
+.DS_Store

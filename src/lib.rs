@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    graph::{Graph, GraphNode, NodeId},
+    graph::{Graph, GraphConnectionError, GraphNode, NodeId},
     oscillator::Oscillator,
     param::Param,
 };
@@ -31,8 +31,14 @@ impl Graph {
     }
 
     #[wasm_bindgen(js_name = connect)]
-    pub fn _connect(&mut self, from: &NodeId, from_port: usize, to: &NodeId, to_port: usize) {
-        self.connect(*from, from_port, *to, to_port);
+    pub fn _connect(
+        &mut self,
+        from: &NodeId,
+        from_port: usize,
+        to: &NodeId,
+        to_port: usize,
+    ) -> Result<(), GraphConnectionError> {
+        self.connect(*from, from_port, *to, to_port)
     }
 
     #[wasm_bindgen(js_name = tick)]
@@ -43,6 +49,41 @@ impl Graph {
     #[wasm_bindgen(js_name = output)]
     pub fn _output(&mut self, node_id: &NodeId) -> Vec<f32> {
         self.output(*node_id).to_vec()
+    }
+}
+
+#[wasm_bindgen]
+pub enum DatagraphError {
+    GraphConnectionErrorNodeNotFound = 0,
+    GraphConnectionErrorPortNotFound = 1,
+}
+
+impl From<GraphConnectionError> for JsValue {
+    fn from(err: GraphConnectionError) -> Self {
+        let arr = js_sys::Array::new();
+        match err {
+            GraphConnectionError::NodeNotFound { node_id } => {
+                arr.push(&JsValue::from(
+                    DatagraphError::GraphConnectionErrorNodeNotFound,
+                ));
+                arr.push(&JsValue::from(node_id));
+            }
+            GraphConnectionError::PortNotFound {
+                node_id,
+                node_type,
+                port,
+                port_type,
+            } => {
+                arr.push(&JsValue::from(
+                    DatagraphError::GraphConnectionErrorPortNotFound,
+                ));
+                arr.push(&JsValue::from(node_id));
+                arr.push(&JsValue::from(node_type));
+                arr.push(&JsValue::from(port));
+                arr.push(&JsValue::from(port_type));
+            }
+        };
+        arr.into()
     }
 }
 

@@ -35,6 +35,7 @@ impl Oscillator {
 }
 
 impl Node<1, 1> for Oscillator {
+    const NODE_TYPE: crate::graph::NodeType = crate::graph::NodeType::Oscillator;
     const INPUT_NAMES: [&'static str; 1] = ["frequency"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
     // sample_rate = samples/second
