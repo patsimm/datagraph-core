@@ -9,6 +9,12 @@ pub struct RingBuffer<T: Copy, const N: usize> {
 unsafe impl<T: Copy, const N: usize> Send for RingBuffer<T, N> {}
 unsafe impl<T: Copy, const N: usize> Sync for RingBuffer<T, N> {}
 
+impl<T: Copy, const N: usize> Default for RingBuffer<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Copy, const N: usize> RingBuffer<T, N> {
     pub fn new() -> Self {
         Self {

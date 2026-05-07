@@ -1,5 +1,6 @@
 use core::f32;
 use std::time::Duration;
+use wasm_bindgen::prelude::*;
 
 use cpal::SampleRate;
 
@@ -9,8 +10,17 @@ use crate::{
     helpers::ToSamples,
 };
 
+#[wasm_bindgen]
 pub struct Oscillator {
     sample_rate: SampleRate,
+}
+
+#[wasm_bindgen]
+impl Oscillator {
+    #[wasm_bindgen(constructor)]
+    pub fn _construct(sample_rate: SampleRate) -> Self {
+        Self { sample_rate }
+    }
 }
 
 impl Oscillator {

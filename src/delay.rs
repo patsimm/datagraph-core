@@ -4,6 +4,12 @@ pub struct Delay {
     ringbuf: RingBuffer<f32, 22050>,
 }
 
+impl Default for Delay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Delay {
     pub fn new() -> Self {
         Self {

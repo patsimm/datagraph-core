@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use wasm_bindgen::prelude::*;
 
 use crate::{
     graph::Node,
     helpers::{AtomicF32, lerp},
 };
 
+#[wasm_bindgen]
 pub struct Param {
     value: Arc<AtomicF32>,
 }

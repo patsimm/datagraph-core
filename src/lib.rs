@@ -1,0 +1,97 @@
+use wasm_bindgen::prelude::*;
+
+use crate::{
+    graph::{Graph, GraphNode, NodeId},
+    oscillator::Oscillator,
+    param::Param,
+};
+
+pub mod delay;
+pub mod event_buffer;
+pub mod frequency;
+pub mod gain;
+pub mod graph;
+pub mod helpers;
+pub mod note;
+pub mod oscillator;
+pub mod param;
+pub mod ring_buffer;
+pub mod wav;
+
+#[wasm_bindgen]
+impl Graph {
+    #[wasm_bindgen(js_name = add)]
+    pub fn _add(&mut self, node: GraphNode) -> NodeId {
+        self.add_node(node)
+    }
+
+    #[wasm_bindgen(js_name = addParam)]
+    pub fn _add_param(&mut self, param: &Param) -> NodeId {
+        self.add_node(GraphNode::from(param.node()))
+    }
+
+    #[wasm_bindgen(js_name = connect)]
+    pub fn _connect(&mut self, from: &NodeId, from_port: usize, to: &NodeId, to_port: usize) {
+        self.connect(*from, from_port, *to, to_port);
+    }
+
+    #[wasm_bindgen(js_name = tick)]
+    pub fn _tick(&mut self, sample_num: usize) {
+        self.tick(sample_num);
+    }
+
+    #[wasm_bindgen(js_name = output)]
+    pub fn _output(&mut self, node_id: &NodeId) -> Vec<f32> {
+        self.output(*node_id).to_vec()
+    }
+}
+
+#[wasm_bindgen(js_name = createGraph)]
+pub fn create_graph() -> Graph {
+    Graph::new()
+}
+
+#[wasm_bindgen(js_name = createOscillator)]
+pub fn create_oscillator(sample_rate: u32) -> GraphNode {
+    GraphNode::from(Oscillator::new(sample_rate))
+}
+
+#[wasm_bindgen(js_name = createParam)]
+pub fn create_param(value: f32) -> Param {
+    Param::new(value)
+}
+
+#[wasm_bindgen]
+impl Param {
+    #[wasm_bindgen(js_name = set)]
+    pub fn _set(&mut self, value: f32) {
+        self.set(value);
+    }
+}
+
+#[wasm_bindgen(js_name = createGain)]
+pub fn create_gain() -> GraphNode {
+    GraphNode::from(gain::Gain)
+}
+
+#[wasm_bindgen(js_name = createADSR)]
+pub fn create_adsr(
+    sample_rate: u32,
+    attack: f32,
+    decay: f32,
+    sustain: f32,
+    release: f32,
+) -> GraphNode {
+    GraphNode::from(gain::ADSR::new(
+        sample_rate,
+        std::time::Duration::from_secs_f32(attack),
+        std::time::Duration::from_secs_f32(decay),
+        sustain,
+        std::time::Duration::from_secs_f32(release),
+    ))
+}
+
+#[wasm_bindgen(js_name = createDelay)]
+pub fn create_delay() -> GraphNode {
+    GraphNode::from(delay::Delay::new())
+}

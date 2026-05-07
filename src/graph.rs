@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use wasm_bindgen::prelude::*;
 
 pub trait Node<const IN: usize, const OUT: usize> {
     const INPUT_NAMES: [&'static str; IN];
@@ -31,14 +32,15 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     }
 }
 
-struct GraphNode {
+#[wasm_bindgen]
+pub struct GraphNode {
     inputs: usize,
     node: Box<dyn DynNode>,
     output_cache: Vec<f32>,
 }
 
 impl GraphNode {
-    fn new<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
+    pub fn from<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
     where
         T: Node<IN, OUT> + Send + 'static,
     {
@@ -50,6 +52,18 @@ impl GraphNode {
     }
 }
 
+pub trait IntoGraphNode<const IN: usize, const OUT: usize> {
+    fn into_graph_node(self) -> GraphNode;
+}
+
+impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send + 'static> IntoGraphNode<IN, OUT>
+    for T
+{
+    fn into_graph_node(self) -> GraphNode {
+        GraphNode::from(self)
+    }
+}
+
 struct Connection {
     from: NodeId,
     from_port: usize,
@@ -57,20 +71,11 @@ struct Connection {
     to_port: usize,
 }
 
+#[wasm_bindgen]
+#[derive(Default)]
 pub struct Graph {
     nodes: Vec<GraphNode>,
     connections: Vec<Connection>,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct NodeId(usize);
-
-impl Deref for NodeId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }
 
 impl Graph {
@@ -81,13 +86,19 @@ impl Graph {
         }
     }
 
-    pub fn add_node<const IN: usize, const OUT: usize>(
+    pub fn add_node(&mut self, node: GraphNode) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(node);
+        id
+    }
+
+    pub fn add<const IN: usize, const OUT: usize>(
         &mut self,
-        node: impl Node<IN, OUT> + Send + 'static,
+        node: impl IntoGraphNode<IN, OUT> + Send + 'static,
     ) -> NodeId {
         let id = NodeId(self.nodes.len());
-        let graph_node = GraphNode::new(node);
-        self.nodes.push(graph_node);
+        let graph_node = node.into_graph_node();
+        self.add_node(graph_node);
         id
     }
 
@@ -116,6 +127,18 @@ impl Graph {
 
     pub fn output(&self, node_id: NodeId) -> &[f32] {
         &self.nodes[*node_id].output_cache
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct NodeId(usize);
+
+impl Deref for NodeId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -155,8 +178,8 @@ mod tests {
     #[test]
     fn graph_adds_nodes() {
         let mut graph = Graph::new();
-        let constant_id = graph.add_node(Param::from(0.5).node());
-        let adder_id = graph.add_node(Adder { value: 0.25 });
+        let constant_id = graph.add(Param::from(0.5).node());
+        let adder_id = graph.add(Adder { value: 0.25 });
         assert_eq!(constant_id.0, 0);
         assert_eq!(adder_id.0, 1);
     }
@@ -164,8 +187,8 @@ mod tests {
     #[test]
     fn graph_connects_nodes() {
         let mut graph = Graph::new();
-        let constant_id = graph.add_node(Param::from(0.5).node());
-        let adder_id = graph.add_node(Adder { value: 0.25 });
+        let constant_id = graph.add(Param::from(0.5).node());
+        let adder_id = graph.add(Adder { value: 0.25 });
         graph.connect(constant_id, 0, adder_id, 0);
         graph.tick(0);
         let output = graph.output(adder_id);

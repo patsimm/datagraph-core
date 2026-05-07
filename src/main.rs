@@ -1,27 +1,15 @@
 use core::f32;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-
-use crate::{
+use datagraph::{
     delay::Delay,
     frequency::{Frequency, ToCv},
     gain::{ADSR, Gain},
+    graph::Graph,
     note::Note,
     oscillator::Oscillator,
     param::Param,
 };
-
-mod delay;
-mod event_buffer;
-mod frequency;
-mod gain;
-mod graph;
-mod helpers;
-mod note;
-mod oscillator;
-mod param;
-mod ring_buffer;
-mod wav;
 
 fn main() {
     let host = cpal::default_host();
@@ -49,21 +37,21 @@ fn main() {
     let delay = Delay::new();
     let gain = Gain;
 
-    let mut graph = graph::Graph::new();
-    let freq_node = graph.add_node(freq.node());
-    let osc_node = graph.add_node(osc);
+    let mut graph = Graph::new();
+    let freq_node = graph.add(freq.node());
+    let osc_node = graph.add(osc);
     graph.connect(freq_node, 0, osc_node, 0);
 
-    let adsr_gate_node = graph.add_node(adsr_gate.node());
-    let adsr_node = graph.add_node(adsr);
-    let adsr_gain = graph.add_node(Gain);
+    let adsr_gate_node = graph.add(adsr_gate.node());
+    let adsr_node = graph.add(adsr);
+    let adsr_gain = graph.add(Gain);
     graph.connect(adsr_gate_node, 0, adsr_node, 0);
     graph.connect(adsr_node, 0, adsr_gain, 1);
 
-    let delay_node = graph.add_node(delay);
+    let delay_node = graph.add(delay);
 
-    let gain_value = graph.add_node(Param::new(0.5).node());
-    let gain_node = graph.add_node(gain);
+    let gain_value = graph.add(Param::new(0.5).node());
+    let gain_node = graph.add(gain);
     graph.connect(gain_value, 0, gain_node, 1);
 
     graph.connect(osc_node, 0, adsr_gain, 0);

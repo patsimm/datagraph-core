@@ -1,7 +1,5 @@
 use std::ops::Deref;
 
-use crate::frequency::Frequency;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[rustfmt::skip]
 pub enum Note {
@@ -44,7 +42,7 @@ impl From<&str> for Note {
             .iter()
             .position(|&n| n == name)
             .expect("Can't parse note name `{name}`");
-        let index = (octave + 1) * 12 + note_index as usize;
+        let index = (octave + 1) * 12 + note_index;
         ALL_NOTES[index]
     }
 }
@@ -94,7 +92,7 @@ impl From<Note> for MidiNote {
 
 #[cfg(test)]
 mod tests {
-    use crate::frequency::FromHz;
+    use crate::frequency::Frequency;
 
     use super::*;
 
