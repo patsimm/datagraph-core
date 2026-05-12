@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    graph::{Graph, GraphConnectionError, GraphNode, NodeId},
+    graph::{Graph, GraphError, GraphNode, NodeId},
     oscillator::Oscillator,
     param::Param,
 };
@@ -37,8 +37,19 @@ impl Graph {
         from_port: usize,
         to: &NodeId,
         to_port: usize,
-    ) -> Result<(), GraphConnectionError> {
+    ) -> Result<(), GraphError> {
         self.connect(*from, from_port, *to, to_port)
+    }
+
+    #[wasm_bindgen(js_name = disconnect)]
+    pub fn _disconnect(
+        &mut self,
+        from: &NodeId,
+        from_port: usize,
+        to: &NodeId,
+        to_port: usize,
+    ) -> Result<(), GraphError> {
+        self.disconnect(*from, from_port, *to, to_port)
     }
 
     #[wasm_bindgen(js_name = tick)]
@@ -54,33 +65,59 @@ impl Graph {
 
 #[wasm_bindgen]
 pub enum DatagraphError {
-    GraphConnectionErrorNodeNotFound = 0,
-    GraphConnectionErrorPortNotFound = 1,
+    NodeNotFound = 0,
+    PortNotFound = 1,
+    PortAlreadyConnected = 2,
+    ImpossibleConnection = 3,
 }
 
-impl From<GraphConnectionError> for JsValue {
-    fn from(err: GraphConnectionError) -> Self {
+impl From<GraphError> for JsValue {
+    fn from(err: GraphError) -> Self {
         let arr = js_sys::Array::new();
         match err {
-            GraphConnectionError::NodeNotFound { node_id } => {
-                arr.push(&JsValue::from(
-                    DatagraphError::GraphConnectionErrorNodeNotFound,
-                ));
+            GraphError::NodeNotFound { node_id } => {
+                arr.push(&JsValue::from(DatagraphError::NodeNotFound));
                 arr.push(&JsValue::from(node_id));
             }
-            GraphConnectionError::PortNotFound {
+            GraphError::PortNotFound {
                 node_id,
                 node_type,
                 port,
                 port_type,
             } => {
-                arr.push(&JsValue::from(
-                    DatagraphError::GraphConnectionErrorPortNotFound,
-                ));
+                arr.push(&JsValue::from(DatagraphError::PortNotFound));
                 arr.push(&JsValue::from(node_id));
                 arr.push(&JsValue::from(node_type));
                 arr.push(&JsValue::from(port));
                 arr.push(&JsValue::from(port_type));
+            }
+            GraphError::PortAlreadyConnected {
+                node_id,
+                node_type,
+                port,
+                port_type,
+            } => {
+                arr.push(&JsValue::from(DatagraphError::PortAlreadyConnected));
+                arr.push(&JsValue::from(node_id));
+                arr.push(&JsValue::from(node_type));
+                arr.push(&JsValue::from(port));
+                arr.push(&JsValue::from(port_type));
+            }
+            GraphError::ImpossibleConnection {
+                from_node_id,
+                from_node_type,
+                from_port,
+                to_node_id,
+                to_node_type,
+                to_port,
+            } => {
+                arr.push(&JsValue::from(DatagraphError::ImpossibleConnection));
+                arr.push(&JsValue::from(from_node_id));
+                arr.push(&JsValue::from(from_node_type));
+                arr.push(&JsValue::from(from_port));
+                arr.push(&JsValue::from(to_node_id));
+                arr.push(&JsValue::from(to_node_type));
+                arr.push(&JsValue::from(to_port));
             }
         };
         arr.into()

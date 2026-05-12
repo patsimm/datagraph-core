@@ -158,39 +158,45 @@ impl Graph {
         from_port: usize,
         to: NodeId,
         to_port: usize,
-    ) -> Result<(), GraphConnectionError> {
-        let from_node = self
-            .nodes
-            .get(*from)
-            .ok_or(GraphConnectionError::NodeNotFound { node_id: from })?;
-        let to_node = self
-            .nodes
-            .get(*to)
-            .ok_or(GraphConnectionError::NodeNotFound { node_id: to })?;
-
-        if from_node.port_info(PortType::Output, from_port).is_none() {
-            return Err(GraphConnectionError::PortNotFound {
-                node_type: from_node.node.node_type(),
-                node_id: from,
-                port: from_port,
-                port_type: PortType::Output,
+    ) -> Result<(), GraphError> {
+        assert_port_exists(self, from, from_port, PortType::Output)?;
+        if from == to {
+            return Err(GraphError::ImpossibleConnection {
+                from_node_id: from,
+                from_node_type: self.nodes[*from].node.node_type(),
+                from_port,
+                to_node_id: to,
+                to_node_type: self.nodes[*to].node.node_type(),
+                to_port,
             });
         }
-
-        if to_node.port_info(PortType::Input, to_port).is_none() {
-            return Err(GraphConnectionError::PortNotFound {
-                node_type: to_node.node.node_type(),
-                node_id: to,
-                port: to_port,
-                port_type: PortType::Input,
-            });
-        }
+        assert_port_is_free(self, to, to_port, PortType::Input)?;
 
         self.connections.push(Connection {
             from,
             from_port,
             to,
             to_port,
+        });
+
+        Ok(())
+    }
+
+    pub fn disconnect(
+        &mut self,
+        from: NodeId,
+        from_port: usize,
+        to: NodeId,
+        to_port: usize,
+    ) -> Result<(), GraphError> {
+        assert_port_exists(self, from, from_port, PortType::Output)?;
+        assert_port_exists(self, to, to_port, PortType::Input)?;
+
+        self.connections.retain(|conn| {
+            !(conn.from == from
+                && conn.from_port == from_port
+                && conn.to == to
+                && conn.to_port == to_port)
         });
 
         Ok(())
@@ -221,14 +227,14 @@ impl Graph {
 }
 
 #[wasm_bindgen]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PortType {
     Input,
     Output,
 }
 
 #[derive(Debug)]
-pub enum GraphConnectionError {
+pub enum GraphError {
     NodeNotFound {
         node_id: NodeId,
     },
@@ -238,15 +244,27 @@ pub enum GraphConnectionError {
         port: usize,
         port_type: PortType,
     },
+    PortAlreadyConnected {
+        node_id: NodeId,
+        node_type: NodeType,
+        port: usize,
+        port_type: PortType,
+    },
+    ImpossibleConnection {
+        from_node_id: NodeId,
+        from_node_type: NodeType,
+        from_port: usize,
+        to_node_id: NodeId,
+        to_node_type: NodeType,
+        to_port: usize,
+    },
 }
 
-impl Display for GraphConnectionError {
+impl Display for GraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(match self {
-            GraphConnectionError::NodeNotFound { node_id } => {
-                write!(f, "Node not found: {:?}", *node_id)?
-            }
-            GraphConnectionError::PortNotFound {
+            GraphError::NodeNotFound { node_id } => write!(f, "Node not found: {:?}", *node_id)?,
+            GraphError::PortNotFound {
                 node_type,
                 node_id,
                 port,
@@ -262,6 +280,34 @@ impl Display for GraphConnectionError {
                     node_type, *node_id, port_type_str, port
                 )?
             }
+            GraphError::PortAlreadyConnected {
+                node_type,
+                node_id,
+                port,
+                port_type,
+            } => {
+                let port_type_str = match port_type {
+                    PortType::Input => "input",
+                    PortType::Output => "output",
+                };
+                write!(
+                    f,
+                    "Port already connected: {:?} node {:?}, {} port {}",
+                    node_type, *node_id, port_type_str, port
+                )?
+            }
+            GraphError::ImpossibleConnection {
+                from_node_id,
+                from_node_type,
+                from_port,
+                to_node_id,
+                to_node_type,
+                to_port,
+            } => write!(
+                f,
+                "Impossible connection: {:?} node {:?} port {} to {:?} node {:?} port {}",
+                from_node_type, *from_node_id, from_port, to_node_type, *to_node_id, to_port
+            )?,
         })
     }
 }
@@ -276,6 +322,62 @@ impl Deref for NodeId {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+fn assert_port_exists(
+    graph: &Graph,
+    node_id: NodeId,
+    port: usize,
+    port_type: PortType,
+) -> Result<(), GraphError> {
+    let node = graph
+        .nodes
+        .get(*node_id)
+        .ok_or(GraphError::NodeNotFound { node_id })?;
+
+    node.port_info(port_type, port).map_or(
+        Err(GraphError::PortNotFound {
+            node_id,
+            node_type: node.node.node_type(),
+            port,
+            port_type,
+        }),
+        |_| Ok(()),
+    )
+}
+
+fn assert_port_is_free(
+    graph: &Graph,
+    node_id: NodeId,
+    port: usize,
+    port_type: PortType,
+) -> Result<(), GraphError> {
+    assert_port_exists(graph, node_id, port, port_type)?;
+
+    let graph_node = graph
+        .nodes
+        .get(*node_id)
+        .ok_or(GraphError::NodeNotFound { node_id })?;
+
+    for conn in &graph.connections {
+        if conn.to == node_id && conn.to_port == port && port_type == PortType::Input {
+            return Err(GraphError::PortAlreadyConnected {
+                node_id,
+                node_type: graph_node.node.node_type(),
+                port,
+                port_type,
+            });
+        }
+        if conn.from == node_id && conn.from_port == port && port_type == PortType::Output {
+            return Err(GraphError::PortAlreadyConnected {
+                node_id,
+                node_type: graph_node.node.node_type(),
+                port,
+                port_type,
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
