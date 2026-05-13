@@ -189,3 +189,8 @@ pub fn create_one_pole_low_pass(smoothing_ms: u64, sample_rate: u32) -> GraphNod
 pub fn create_delay() -> GraphNode {
     GraphNode::from(delay::Delay::new())
 }
+
+#[wasm_bindgen(js_name = createPassthrough)]
+pub fn create_passthrough() -> GraphNode {
+    GraphNode::from(graph::Passthrough)
+}
