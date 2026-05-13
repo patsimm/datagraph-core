@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use wasm_bindgen::prelude::*;
 
 use crate::{
@@ -8,6 +10,7 @@ use crate::{
 
 pub mod delay;
 pub mod event_buffer;
+pub mod filter;
 pub mod frequency;
 pub mod gain;
 pub mod graph;
@@ -171,6 +174,14 @@ pub fn create_adsr(
         std::time::Duration::from_secs_f32(decay),
         sustain,
         std::time::Duration::from_secs_f32(release),
+    ))
+}
+
+#[wasm_bindgen(js_name = createOnePoleLowPass)]
+pub fn create_one_pole_low_pass(smoothing_ms: u64, sample_rate: u32) -> GraphNode {
+    GraphNode::from(filter::OnePoleLowPass::from_smoothing_time(
+        Duration::from_millis(smoothing_ms),
+        sample_rate,
     ))
 }
 
