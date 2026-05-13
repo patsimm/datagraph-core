@@ -3,7 +3,7 @@ use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    graph::{Graph, GraphError, GraphNode, NodeId, NodeInfo},
+    graph::{Graph, GraphError, GraphNode, NodeInfo},
     oscillator::Oscillator,
     param::Param,
 };
@@ -24,35 +24,35 @@ pub mod wav;
 #[wasm_bindgen]
 impl Graph {
     #[wasm_bindgen(js_name = add)]
-    pub fn _add(&mut self, node: GraphNode) -> usize {
-        *self.add_node(node)
+    pub fn _add(&mut self, node: GraphNode) -> String {
+        self.add_node(node).to_string()
     }
 
     #[wasm_bindgen(js_name = addParam)]
-    pub fn _add_param(&mut self, param: &Param) -> usize {
-        *self.add_node(GraphNode::from(param.node()))
+    pub fn _add_param(&mut self, param: &Param) -> String {
+        self.add_node(GraphNode::from(param.node())).to_string()
     }
 
     #[wasm_bindgen(js_name = connect)]
     pub fn _connect(
         &mut self,
-        from: usize,
+        from: String,
         from_port: usize,
-        to: usize,
+        to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.connect(NodeId(from), from_port, NodeId(to), to_port)
+        self.connect(from.into(), from_port, to.into(), to_port)
     }
 
     #[wasm_bindgen(js_name = disconnect)]
     pub fn _disconnect(
         &mut self,
-        from: usize,
+        from: String,
         from_port: usize,
-        to: usize,
+        to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.disconnect(NodeId(from), from_port, NodeId(to), to_port)
+        self.disconnect(from.into(), from_port, to.into(), to_port)
     }
 
     #[wasm_bindgen(js_name = tick)]
@@ -61,13 +61,13 @@ impl Graph {
     }
 
     #[wasm_bindgen(js_name = output)]
-    pub fn _output(&mut self, node_id: usize) -> Vec<f32> {
-        self.output(NodeId(node_id)).to_vec()
+    pub fn _output(&mut self, node_id: String) -> Vec<f32> {
+        self.output(node_id.into()).to_vec()
     }
 
     #[wasm_bindgen(js_name = nodeInfo)]
-    pub fn _node_info(&self, node_id: usize) -> Option<NodeInfo> {
-        self.info(NodeId(node_id))
+    pub fn _node_info(&self, node_id: String) -> Result<NodeInfo, GraphError> {
+        self.info(node_id.into())
     }
 }
 
@@ -85,46 +85,38 @@ impl From<GraphError> for JsValue {
         match err {
             GraphError::NodeNotFound { node_id } => {
                 arr.push(&JsValue::from(DatagraphError::NodeNotFound));
-                arr.push(&JsValue::from(*node_id));
+                arr.push(&JsValue::from(node_id.to_string()));
             }
             GraphError::PortNotFound {
                 node_id,
-                node_type,
                 port,
                 port_type,
             } => {
                 arr.push(&JsValue::from(DatagraphError::PortNotFound));
-                arr.push(&JsValue::from(*node_id));
-                arr.push(&JsValue::from(node_type));
+                arr.push(&JsValue::from(node_id.to_string()));
                 arr.push(&JsValue::from(port));
                 arr.push(&JsValue::from(port_type));
             }
             GraphError::PortAlreadyConnected {
                 node_id,
-                node_type,
                 port,
                 port_type,
             } => {
                 arr.push(&JsValue::from(DatagraphError::PortAlreadyConnected));
-                arr.push(&JsValue::from(*node_id));
-                arr.push(&JsValue::from(node_type));
+                arr.push(&JsValue::from(node_id.to_string()));
                 arr.push(&JsValue::from(port));
                 arr.push(&JsValue::from(port_type));
             }
             GraphError::ImpossibleConnection {
                 from_node_id,
-                from_node_type,
                 from_port,
                 to_node_id,
-                to_node_type,
                 to_port,
             } => {
                 arr.push(&JsValue::from(DatagraphError::ImpossibleConnection));
-                arr.push(&JsValue::from(*from_node_id));
-                arr.push(&JsValue::from(from_node_type));
+                arr.push(&JsValue::from(from_node_id.to_string()));
                 arr.push(&JsValue::from(from_port));
-                arr.push(&JsValue::from(*to_node_id));
-                arr.push(&JsValue::from(to_node_type));
+                arr.push(&JsValue::from(to_node_id.to_string()));
                 arr.push(&JsValue::from(to_port));
             }
         };

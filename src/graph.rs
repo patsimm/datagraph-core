@@ -1,4 +1,5 @@
-use std::{fmt::Display, ops::Deref};
+use nanoid::nanoid;
+use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -86,10 +87,12 @@ impl GraphNode {
     where
         T: Node<IN, OUT> + Send + 'static,
     {
+        let mut node = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
+        let output_cache = node.process(&vec![0.0; IN], 0);
         GraphNode {
             inputs: IN,
-            node: Box::new(DynNodeWrapper::<IN, OUT, T>(node)),
-            output_cache: vec![0.0; OUT],
+            node,
+            output_cache,
         }
     }
 
@@ -149,21 +152,21 @@ struct Connection {
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct Graph {
-    nodes: Vec<GraphNode>,
+    nodes: HashMap<NodeId, GraphNode>,
     connections: Vec<Connection>,
 }
 
 impl Graph {
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
+            nodes: HashMap::new(),
             connections: Vec::new(),
         }
     }
 
     pub fn add_node(&mut self, node: GraphNode) -> NodeId {
-        let id = NodeId(self.nodes.len());
-        self.nodes.push(node);
+        let id = NodeId::new();
+        self.nodes.insert(id, node);
         id
     }
 
@@ -171,14 +174,23 @@ impl Graph {
         &mut self,
         node: impl IntoGraphNode<IN, OUT> + Send + 'static,
     ) -> NodeId {
-        let id = NodeId(self.nodes.len());
         let graph_node = node.into_graph_node();
-        self.add_node(graph_node);
-        id
+        self.add_node(graph_node)
     }
 
-    pub fn info(&self, node_id: NodeId) -> Option<NodeInfo> {
-        self.nodes.get(*node_id).map(|node| node.node.node_info())
+    pub fn remove(&mut self, node: NodeId) -> Result<(), GraphError> {
+        assert_node_exists(self, node)?;
+        self.nodes.remove(&node);
+        self.connections
+            .retain(|conn| conn.from != node && conn.to != node);
+        Ok(())
+    }
+
+    pub fn info(&self, node: NodeId) -> Result<NodeInfo, GraphError> {
+        self.nodes
+            .get(&node)
+            .map(|node| node.node.node_info())
+            .ok_or(GraphError::NodeNotFound { node_id: node })
     }
 
     pub fn connect(
@@ -192,10 +204,8 @@ impl Graph {
         if from == to {
             return Err(GraphError::ImpossibleConnection {
                 from_node_id: from,
-                from_node_type: self.nodes[*from].node.node_type(),
                 from_port,
                 to_node_id: to,
-                to_node_type: self.nodes[*to].node.node_type(),
                 to_port,
             });
         }
@@ -232,26 +242,29 @@ impl Graph {
     }
 
     pub fn port_info(&self, node_id: NodeId, port: usize, port_type: PortType) -> Option<PortInfo> {
-        let node = self.nodes.get(*node_id)?;
+        let node = self.nodes.get(&node_id)?;
         node.port_info(port_type, port)
     }
 
     pub fn tick(&mut self, sample_num: usize) {
-        for node_id in 0..self.nodes.len() {
-            let mut inputs = vec![0.0; self.nodes[node_id].inputs];
-            for conn in &mut self.connections {
-                if conn.to != NodeId(node_id) {
-                    continue;
-                }
-                inputs[conn.to_port] = self.nodes[*conn.from].output_cache[conn.from_port];
-            }
-            let node = &mut self.nodes[node_id];
-            node.output_cache = node.node.process(&inputs, sample_num);
+        let keys: Vec<NodeId> = self.nodes.keys().cloned().collect();
+        let mut all_inputs: HashMap<NodeId, Vec<f32>> = keys
+            .iter()
+            .map(|&id| (id, vec![0.0; self.nodes[&id].inputs]))
+            .collect();
+        for conn in &self.connections {
+            all_inputs.get_mut(&conn.to).unwrap()[conn.to_port] =
+                self.nodes[&conn.from].output_cache[conn.from_port];
+        }
+        for node_id in keys {
+            let inputs = &all_inputs[&node_id];
+            let node = self.nodes.get_mut(&node_id).unwrap();
+            node.output_cache = node.node.process(inputs, sample_num);
         }
     }
 
     pub fn output(&self, node_id: NodeId) -> &[f32] {
-        &self.nodes[*node_id].output_cache
+        &self.nodes[&node_id].output_cache
     }
 }
 
@@ -269,22 +282,18 @@ pub enum GraphError {
     },
     PortNotFound {
         node_id: NodeId,
-        node_type: String,
         port: usize,
         port_type: PortType,
     },
     PortAlreadyConnected {
         node_id: NodeId,
-        node_type: String,
         port: usize,
         port_type: PortType,
     },
     ImpossibleConnection {
         from_node_id: NodeId,
-        from_node_type: String,
         from_port: usize,
         to_node_id: NodeId,
-        to_node_type: String,
         to_port: usize,
     },
 }
@@ -294,7 +303,6 @@ impl Display for GraphError {
         Ok(match self {
             GraphError::NodeNotFound { node_id } => write!(f, "Node not found: {:?}", *node_id)?,
             GraphError::PortNotFound {
-                node_type,
                 node_id,
                 port,
                 port_type,
@@ -305,12 +313,11 @@ impl Display for GraphError {
                 };
                 write!(
                     f,
-                    "Port not found: {:?} node {:?}, {} port {}",
-                    node_type, *node_id, port_type_str, port
+                    "Port not found: node {:?} has no {} port {}",
+                    node_id, port_type_str, port
                 )?
             }
             GraphError::PortAlreadyConnected {
-                node_type,
                 node_id,
                 port,
                 port_type,
@@ -321,35 +328,74 @@ impl Display for GraphError {
                 };
                 write!(
                     f,
-                    "Port already connected: {:?} node {:?}, {} port {}",
-                    node_type, *node_id, port_type_str, port
+                    "Port already connected: node {:?} {} port {} is already connected",
+                    node_id, port_type_str, port
                 )?
             }
             GraphError::ImpossibleConnection {
                 from_node_id,
-                from_node_type,
                 from_port,
                 to_node_id,
-                to_node_type,
                 to_port,
             } => write!(
                 f,
-                "Impossible connection: {:?} node {:?} port {} to {:?} node {:?} port {}",
-                from_node_type, *from_node_id, from_port, to_node_type, *to_node_id, to_port
+                "Impossible connection: cannot connect output port {} of node {:?} to input port {} of node {:?}",
+                from_port, from_node_id, to_port, to_node_id
             )?,
         })
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct NodeId(pub usize);
+pub struct NodeId([char; 8]);
+
+impl From<String> for NodeId {
+    fn from(s: String) -> Self {
+        NodeId::from_str(&s)
+    }
+}
+
+impl Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: String = self.0.iter().collect();
+        write!(f, "{}", s)
+    }
+}
+
+impl NodeId {
+    pub fn new() -> Self {
+        NodeId(nanoid!(8).chars().collect::<Vec<_>>().try_into().unwrap())
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        if s.len() != 8 {
+            return NodeId::invalid();
+        }
+        let chars = s.chars().collect::<Vec<_>>();
+        chars
+            .try_into()
+            .map_or_else(|_| NodeId::invalid(), |chars| NodeId(chars))
+    }
+
+    pub fn invalid() -> Self {
+        NodeId(['\0'; 8])
+    }
+}
 
 impl Deref for NodeId {
-    type Target = usize;
+    type Target = [char];
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+fn assert_node_exists(graph: &Graph, node_id: NodeId) -> Result<(), GraphError> {
+    graph
+        .nodes
+        .get(&node_id)
+        .ok_or(GraphError::NodeNotFound { node_id })?;
+    Ok(())
 }
 
 fn assert_port_exists(
@@ -360,13 +406,12 @@ fn assert_port_exists(
 ) -> Result<(), GraphError> {
     let node = graph
         .nodes
-        .get(*node_id)
+        .get(&node_id)
         .ok_or(GraphError::NodeNotFound { node_id })?;
 
     node.port_info(port_type, port).map_or(
         Err(GraphError::PortNotFound {
             node_id,
-            node_type: node.node.node_type(),
             port,
             port_type,
         }),
@@ -382,16 +427,10 @@ fn assert_port_is_free(
 ) -> Result<(), GraphError> {
     assert_port_exists(graph, node_id, port, port_type)?;
 
-    let graph_node = graph
-        .nodes
-        .get(*node_id)
-        .ok_or(GraphError::NodeNotFound { node_id })?;
-
     for conn in &graph.connections {
         if conn.to == node_id && conn.to_port == port && port_type == PortType::Input {
             return Err(GraphError::PortAlreadyConnected {
                 node_id,
-                node_type: graph_node.node.node_type(),
                 port,
                 port_type,
             });
@@ -399,7 +438,6 @@ fn assert_port_is_free(
         if conn.from == node_id && conn.from_port == port && port_type == PortType::Output {
             return Err(GraphError::PortAlreadyConnected {
                 node_id,
-                node_type: graph_node.node.node_type(),
                 port,
                 port_type,
             });
@@ -440,7 +478,9 @@ impl Node<2, 1> for Multiply {
 
 #[cfg(test)]
 mod tests {
-    use crate::param::Param;
+    use std::any::type_name;
+
+    use crate::param::{Param, ParamNode};
 
     use super::*;
 
@@ -455,11 +495,10 @@ mod tests {
     fn graph_adds_nodes() {
         let mut graph = Graph::new();
         let constant_id1 = graph.add(Param::from(0.5).node());
-        let constant_id2 = graph.add(Param::from(0.25).node());
-        let adder_id = graph.add(Add);
-        assert_eq!(constant_id1.0, 0);
-        assert_eq!(constant_id2.0, 1);
-        assert_eq!(adder_id.0, 2);
+        assert_eq!(
+            graph.info(constant_id1).unwrap().node_type,
+            type_name::<ParamNode>()
+        );
     }
 
     #[test]

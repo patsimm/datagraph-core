@@ -108,8 +108,11 @@ mod tests {
         assert_eq!(graph.output(filter_id), &[0.0]);
 
         // Step param to 1.0 — filter should NOT jump instantly
+        // With double-buffered graph, the param cache updates on tick 10,
+        // and the filter sees the new value on tick 11.
         param.set(1.0);
         graph.tick(10);
+        graph.tick(11);
         let first = graph.output(filter_id)[0];
         // alpha=0.5: expected output = 0.5 * 1.0 + 0.5 * 0.0 = 0.5
         assert!(
@@ -125,7 +128,7 @@ mod tests {
         );
 
         // Converges to 1.0 after many ticks
-        for i in 11..200 {
+        for i in 12..200 {
             graph.tick(i);
         }
         let final_out = graph.output(filter_id)[0];
