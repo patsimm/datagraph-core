@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    graph::{Graph, GraphError, GraphNode, NodeId},
+    graph::{Graph, GraphError, GraphNode, NodeId, NodeInfo},
     oscillator::Oscillator,
     param::Param,
 };
@@ -21,35 +21,35 @@ pub mod wav;
 #[wasm_bindgen]
 impl Graph {
     #[wasm_bindgen(js_name = add)]
-    pub fn _add(&mut self, node: GraphNode) -> NodeId {
-        self.add_node(node)
+    pub fn _add(&mut self, node: GraphNode) -> usize {
+        *self.add_node(node)
     }
 
     #[wasm_bindgen(js_name = addParam)]
-    pub fn _add_param(&mut self, param: &Param) -> NodeId {
-        self.add_node(GraphNode::from(param.node()))
+    pub fn _add_param(&mut self, param: &Param) -> usize {
+        *self.add_node(GraphNode::from(param.node()))
     }
 
     #[wasm_bindgen(js_name = connect)]
     pub fn _connect(
         &mut self,
-        from: &NodeId,
+        from: usize,
         from_port: usize,
-        to: &NodeId,
+        to: usize,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.connect(*from, from_port, *to, to_port)
+        self.connect(NodeId(from), from_port, NodeId(to), to_port)
     }
 
     #[wasm_bindgen(js_name = disconnect)]
     pub fn _disconnect(
         &mut self,
-        from: &NodeId,
+        from: usize,
         from_port: usize,
-        to: &NodeId,
+        to: usize,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.disconnect(*from, from_port, *to, to_port)
+        self.disconnect(NodeId(from), from_port, NodeId(to), to_port)
     }
 
     #[wasm_bindgen(js_name = tick)]
@@ -58,8 +58,13 @@ impl Graph {
     }
 
     #[wasm_bindgen(js_name = output)]
-    pub fn _output(&mut self, node_id: &NodeId) -> Vec<f32> {
-        self.output(*node_id).to_vec()
+    pub fn _output(&mut self, node_id: usize) -> Vec<f32> {
+        self.output(NodeId(node_id)).to_vec()
+    }
+
+    #[wasm_bindgen(js_name = nodeInfo)]
+    pub fn _node_info(&self, node_id: usize) -> Option<NodeInfo> {
+        self.info(NodeId(node_id))
     }
 }
 
@@ -77,7 +82,7 @@ impl From<GraphError> for JsValue {
         match err {
             GraphError::NodeNotFound { node_id } => {
                 arr.push(&JsValue::from(DatagraphError::NodeNotFound));
-                arr.push(&JsValue::from(node_id));
+                arr.push(&JsValue::from(*node_id));
             }
             GraphError::PortNotFound {
                 node_id,
@@ -86,7 +91,7 @@ impl From<GraphError> for JsValue {
                 port_type,
             } => {
                 arr.push(&JsValue::from(DatagraphError::PortNotFound));
-                arr.push(&JsValue::from(node_id));
+                arr.push(&JsValue::from(*node_id));
                 arr.push(&JsValue::from(node_type));
                 arr.push(&JsValue::from(port));
                 arr.push(&JsValue::from(port_type));
@@ -98,7 +103,7 @@ impl From<GraphError> for JsValue {
                 port_type,
             } => {
                 arr.push(&JsValue::from(DatagraphError::PortAlreadyConnected));
-                arr.push(&JsValue::from(node_id));
+                arr.push(&JsValue::from(*node_id));
                 arr.push(&JsValue::from(node_type));
                 arr.push(&JsValue::from(port));
                 arr.push(&JsValue::from(port_type));
@@ -112,10 +117,10 @@ impl From<GraphError> for JsValue {
                 to_port,
             } => {
                 arr.push(&JsValue::from(DatagraphError::ImpossibleConnection));
-                arr.push(&JsValue::from(from_node_id));
+                arr.push(&JsValue::from(*from_node_id));
                 arr.push(&JsValue::from(from_node_type));
                 arr.push(&JsValue::from(from_port));
-                arr.push(&JsValue::from(to_node_id));
+                arr.push(&JsValue::from(*to_node_id));
                 arr.push(&JsValue::from(to_node_type));
                 arr.push(&JsValue::from(to_port));
             }

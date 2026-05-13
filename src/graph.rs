@@ -2,19 +2,37 @@ use std::{fmt::Display, ops::Deref};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeType {
-    Unknown = 0,
-    Oscillator = 1,
-    Param = 2,
-    Gain = 3,
-    ADSR = 4,
-    Delay = 5,
+pub struct NodeInfo {
+    input_names: Vec<&'static str>,
+    output_names: Vec<&'static str>,
+    node_type: String,
+}
+
+#[wasm_bindgen]
+impl NodeInfo {
+    #[wasm_bindgen(getter, js_name = inputNames)]
+    pub fn input_names(&self) -> Vec<JsValue> {
+        self.input_names
+            .iter()
+            .map(|s| JsValue::from_str(s))
+            .collect()
+    }
+
+    #[wasm_bindgen(getter, js_name = outputNames)]
+    pub fn output_names(&self) -> Vec<JsValue> {
+        self.output_names
+            .iter()
+            .map(|s| JsValue::from_str(s))
+            .collect()
+    }
+
+    #[wasm_bindgen(getter, js_name = nodeType)]
+    pub fn node_type(&self) -> String {
+        self.node_type.clone()
+    }
 }
 
 pub trait Node<const IN: usize, const OUT: usize> {
-    const NODE_TYPE: NodeType;
     const INPUT_NAMES: [&'static str; IN];
     const OUTPUT_NAMES: [&'static str; OUT];
     fn process(&mut self, input: [f32; IN], sample_num: usize) -> [f32; OUT];
@@ -24,7 +42,14 @@ pub trait DynNode: Send {
     fn input_names(&self) -> &[&'static str];
     fn output_names(&self) -> &[&'static str];
     fn process(&mut self, input: &[f32], sample_num: usize) -> Vec<f32>;
-    fn node_type(&self) -> NodeType;
+    fn node_type(&self) -> String;
+    fn node_info(&self) -> NodeInfo {
+        NodeInfo {
+            input_names: self.input_names().to_vec(),
+            output_names: self.output_names().to_vec(),
+            node_type: self.node_type(),
+        }
+    }
 }
 
 struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T);
@@ -44,8 +69,8 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
         let out_array = self.0.process(in_array, sample_num);
         out_array.to_vec()
     }
-    fn node_type(&self) -> NodeType {
-        T::NODE_TYPE
+    fn node_type(&self) -> String {
+        std::any::type_name::<T>().to_string()
     }
 }
 
@@ -152,6 +177,10 @@ impl Graph {
         id
     }
 
+    pub fn info(&self, node_id: NodeId) -> Option<NodeInfo> {
+        self.nodes.get(*node_id).map(|node| node.node.node_info())
+    }
+
     pub fn connect(
         &mut self,
         from: NodeId,
@@ -240,22 +269,22 @@ pub enum GraphError {
     },
     PortNotFound {
         node_id: NodeId,
-        node_type: NodeType,
+        node_type: String,
         port: usize,
         port_type: PortType,
     },
     PortAlreadyConnected {
         node_id: NodeId,
-        node_type: NodeType,
+        node_type: String,
         port: usize,
         port_type: PortType,
     },
     ImpossibleConnection {
         from_node_id: NodeId,
-        from_node_type: NodeType,
+        from_node_type: String,
         from_port: usize,
         to_node_id: NodeId,
-        to_node_type: NodeType,
+        to_node_type: String,
         to_port: usize,
     },
 }
@@ -312,9 +341,8 @@ impl Display for GraphError {
     }
 }
 
-#[wasm_bindgen]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct NodeId(usize);
+pub struct NodeId(pub usize);
 
 impl Deref for NodeId {
     type Target = usize;
@@ -391,7 +419,6 @@ mod tests {
     }
 
     impl Node<1, 1> for Adder {
-        const NODE_TYPE: NodeType = NodeType::Unknown;
         const INPUT_NAMES: [&'static str; 1] = ["input"];
         const OUTPUT_NAMES: [&'static str; 1] = ["output"];
         fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {

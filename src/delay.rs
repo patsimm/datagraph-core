@@ -19,7 +19,6 @@ impl Delay {
 }
 
 impl Node<1, 1> for Delay {
-    const NODE_TYPE: crate::graph::NodeType = crate::graph::NodeType::Delay;
     const INPUT_NAMES: [&'static str; 1] = ["input"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
     fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
