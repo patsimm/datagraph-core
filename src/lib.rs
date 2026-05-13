@@ -8,11 +8,11 @@ use crate::{
     param::Param,
 };
 
+pub mod adsr;
 pub mod delay;
 pub mod event_buffer;
 pub mod filter;
 pub mod frequency;
-pub mod gain;
 pub mod graph;
 pub mod helpers;
 pub mod note;
@@ -155,9 +155,9 @@ impl Param {
     }
 }
 
-#[wasm_bindgen(js_name = createGain)]
-pub fn create_gain() -> GraphNode {
-    GraphNode::from(gain::Gain)
+#[wasm_bindgen(js_name = createMultiply)]
+pub fn create_multiply() -> GraphNode {
+    GraphNode::from(graph::Multiply)
 }
 
 #[wasm_bindgen(js_name = createADSR)]
@@ -168,7 +168,7 @@ pub fn create_adsr(
     sustain: f32,
     release: f32,
 ) -> GraphNode {
-    GraphNode::from(gain::ADSR::new(
+    GraphNode::from(adsr::ADSR::new(
         sample_rate,
         std::time::Duration::from_secs_f32(attack),
         std::time::Duration::from_secs_f32(decay),
@@ -193,4 +193,9 @@ pub fn create_delay() -> GraphNode {
 #[wasm_bindgen(js_name = createPassthrough)]
 pub fn create_passthrough() -> GraphNode {
     GraphNode::from(graph::Passthrough)
+}
+
+#[wasm_bindgen(js_name = createAdd)]
+pub fn create_add() -> GraphNode {
+    GraphNode::from(graph::Add)
 }

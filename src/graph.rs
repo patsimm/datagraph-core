@@ -418,23 +418,31 @@ impl Node<1, 1> for Passthrough {
     }
 }
 
+pub struct Add;
+
+impl Node<2, 1> for Add {
+    const INPUT_NAMES: [&'static str; 2] = ["input1", "input2"];
+    const OUTPUT_NAMES: [&'static str; 1] = ["output"];
+    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
+        [input[0] + input[1]]
+    }
+}
+
+pub struct Multiply;
+
+impl Node<2, 1> for Multiply {
+    const INPUT_NAMES: [&'static str; 2] = ["input1", "input2"];
+    const OUTPUT_NAMES: [&'static str; 1] = ["output"];
+    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
+        [input[0] * input[1]]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::param::Param;
 
     use super::*;
-
-    struct Adder {
-        value: f32,
-    }
-
-    impl Node<1, 1> for Adder {
-        const INPUT_NAMES: [&'static str; 1] = ["input"];
-        const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-        fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
-            [input[0] + self.value]
-        }
-    }
 
     #[test]
     fn constant_outputs_constant() {
@@ -444,29 +452,27 @@ mod tests {
     }
 
     #[test]
-    fn adder_adds_value() {
-        let param: Param = 0.5.into();
-        let mut adder = Adder { value: 0.25 };
-        let output = adder.process(param.node().process([], 0), 0);
-        assert_eq!(output, [0.75]);
-    }
-
-    #[test]
     fn graph_adds_nodes() {
         let mut graph = Graph::new();
-        let constant_id = graph.add(Param::from(0.5).node());
-        let adder_id = graph.add(Adder { value: 0.25 });
-        assert_eq!(constant_id.0, 0);
-        assert_eq!(adder_id.0, 1);
+        let constant_id1 = graph.add(Param::from(0.5).node());
+        let constant_id2 = graph.add(Param::from(0.25).node());
+        let adder_id = graph.add(Add);
+        assert_eq!(constant_id1.0, 0);
+        assert_eq!(constant_id2.0, 1);
+        assert_eq!(adder_id.0, 2);
     }
 
     #[test]
     fn graph_connects_nodes() {
         let mut graph = Graph::new();
         let constant_id = graph.add(Param::from(0.5).node());
-        let adder_id = graph.add(Adder { value: 0.25 });
+        let constant_id2 = graph.add(Param::from(0.25).node());
+        let adder_id = graph.add(Add);
         graph
             .connect(constant_id, 0, adder_id, 0)
+            .expect("Failed to connect nodes");
+        graph
+            .connect(constant_id2, 0, adder_id, 1)
             .expect("Failed to connect nodes");
         graph.tick(0);
         let output = graph.output(adder_id);
@@ -477,7 +483,7 @@ mod tests {
     fn graph_connect_fails_when_invalid_port() {
         let mut graph = Graph::new();
         let constant_id = graph.add(Param::from(0.5).node());
-        let adder_id = graph.add(Adder { value: 0.25 });
+        let adder_id = graph.add(Add);
         let result = graph.connect(constant_id, 1, adder_id, 0);
         assert!(result.is_err());
     }

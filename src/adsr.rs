@@ -4,16 +4,6 @@ use cpal::SampleRate;
 
 use crate::{graph::Node, helpers::ToSamples, param::Ramp};
 
-pub struct Gain;
-
-impl Node<2, 1> for Gain {
-    const INPUT_NAMES: [&'static str; 2] = ["input", "gain"];
-    const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
-        [input[1] * input[0]]
-    }
-}
-
 pub struct ADSR {
     attack: Ramp,
     decay: Ramp,

@@ -2,10 +2,10 @@ use core::f32;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use datagraph::{
+    adsr::ADSR,
     delay::Delay,
     frequency::{Frequency, ToCv},
-    gain::{ADSR, Gain},
-    graph::Graph,
+    graph::{Graph, Multiply},
     note::Note,
     oscillator::Oscillator,
     param::Param,
@@ -35,7 +35,7 @@ fn main() {
         std::time::Duration::from_millis(150),
     );
     let delay = Delay::new();
-    let gain = Gain;
+    let gain = Multiply;
 
     let mut graph = Graph::new();
     let freq_node = graph.add(freq.node());
@@ -46,7 +46,7 @@ fn main() {
 
     let adsr_gate_node = graph.add(adsr_gate.node());
     let adsr_node = graph.add(adsr);
-    let adsr_gain = graph.add(Gain);
+    let adsr_gain = graph.add(Multiply);
     graph
         .connect(adsr_gate_node, 0, adsr_node, 0)
         .expect("Failed to connect ADSR gate to ADSR");
