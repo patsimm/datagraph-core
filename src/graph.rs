@@ -178,7 +178,7 @@ impl Graph {
         self.add_node(graph_node)
     }
 
-    pub fn remove(&mut self, node: NodeId) -> Result<(), GraphError> {
+    pub fn remove_node(&mut self, node: NodeId) -> Result<(), GraphError> {
         assert_node_exists(self, node)?;
         self.nodes.remove(&node);
         self.connections

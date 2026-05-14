@@ -28,6 +28,11 @@ impl Graph {
         self.add_node(node).to_string()
     }
 
+    #[wasm_bindgen(js_name = remove)]
+    pub fn _remove(&mut self, node_id: String) -> Result<(), GraphError> {
+        self.remove_node(node_id.into())
+    }
+
     #[wasm_bindgen(js_name = addParam)]
     pub fn _add_param(&mut self, param: &Param) -> String {
         self.add_node(GraphNode::from(param.node())).to_string()
