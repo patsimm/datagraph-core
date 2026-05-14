@@ -7,7 +7,7 @@ use datagraph::{
     frequency::{Frequency, ToCv},
     graph::{Graph, Multiply},
     note::Note,
-    oscillator::Oscillator,
+    oscillator::Sin,
     param::Param,
 };
 
@@ -25,7 +25,7 @@ fn main() {
     println!("Default output config: {:?}", config);
 
     let mut freq = Param::from(Frequency::from(Note::C4).to_cv());
-    let osc = Oscillator::new(config.sample_rate());
+    let osc = Sin::new(config.sample_rate());
     let mut adsr_gate = Param::from(0.0);
     let adsr = ADSR::new(
         config.sample_rate(),

@@ -100,27 +100,27 @@ mod tests {
     fn midi_0_is_frequency_8_18hz() {
         let note = MidiNote(0);
         let result: Frequency = note.into();
-        assert_eq!(8.175773, *result);
+        assert_eq!(8.175773, result.hz());
     }
 
     #[test]
     fn midi_69_is_frequency_440hz() {
         let note = MidiNote(69);
         let result: Frequency = note.into();
-        assert_eq!(440.0, *result);
+        assert_eq!(440.0, result.hz());
     }
 
     #[test]
     fn midi_127_is_frequency_12543hz() {
         let note: Frequency = MidiNote(127).into();
-        assert_eq!(12543.888, *note);
+        assert_eq!(12543.888, note.hz());
     }
 
     #[test]
     fn midi_60_is_frequency_261hz() {
         let note: MidiNote = 60.into();
         let result: Frequency = note.into();
-        assert_eq!(261.62546, *result);
+        assert_eq!(261.62546, result.hz());
     }
 
     #[test]

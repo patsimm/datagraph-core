@@ -4,7 +4,6 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     graph::{Graph, GraphError, GraphNode, NodeInfo},
-    oscillator::Oscillator,
     param::Param,
 };
 
@@ -134,9 +133,19 @@ pub fn create_graph() -> Graph {
     Graph::new()
 }
 
-#[wasm_bindgen(js_name = createOscillator)]
-pub fn create_oscillator(sample_rate: u32) -> GraphNode {
-    GraphNode::from(Oscillator::new(sample_rate))
+#[wasm_bindgen(js_name = createSin)]
+pub fn create_sin(sample_rate: u32) -> GraphNode {
+    GraphNode::from(oscillator::Sin::new(sample_rate))
+}
+
+#[wasm_bindgen(js_name = createSaw)]
+pub fn create_saw(sample_rate: u32) -> GraphNode {
+    GraphNode::from(oscillator::Saw::new(sample_rate))
+}
+
+#[wasm_bindgen(js_name = createSquare)]
+pub fn create_square(sample_rate: u32) -> GraphNode {
+    GraphNode::from(oscillator::Square::new(sample_rate))
 }
 
 #[wasm_bindgen(js_name = createParam)]

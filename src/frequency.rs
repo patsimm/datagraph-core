@@ -1,16 +1,8 @@
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 
 use crate::note::MidiNote;
 
 pub struct Frequency(f32);
-
-impl Deref for Frequency {
-    type Target = f32;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl From<Frequency> for Duration {
     fn from(freq: Frequency) -> Self {
@@ -75,5 +67,11 @@ impl ToCv for Frequency {
         let c4_freq = 261.63;
         let semitone_ratio = 2f32.powf(1.0 / 12.0);
         (self.0 / c4_freq).log(semitone_ratio) / 12.0
+    }
+}
+
+impl Frequency {
+    pub fn hz(&self) -> f32 {
+        self.0
     }
 }
