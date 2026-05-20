@@ -42,7 +42,7 @@ impl From<&str> for Note {
             .iter()
             .position(|&n| n == name)
             .expect("Can't parse note name `{name}`");
-        let index = (octave + 1) * 12 + note_index;
+        let index = octave * 12 + note_index;
         ALL_NOTES[index]
     }
 }
@@ -86,7 +86,7 @@ impl From<Note> for MidiNote {
             .iter()
             .position(|&n| n == note)
             .expect("Can't find note in ALL_NOTES");
-        Self(note_num as u8)
+        Self(note_num as u8 + 12)
     }
 }
 

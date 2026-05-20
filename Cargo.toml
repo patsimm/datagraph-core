@@ -1,6 +1,6 @@
 [package]
 name = "datagraph"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Patrick Simmelbauer <patrick.simmelbauer@gmail.com>"]
 description = "core of datagraph"
