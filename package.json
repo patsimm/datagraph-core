@@ -7,13 +7,13 @@
   "main": "./pkg/datagraph.js",
   "types": "./pkg/datagraph.d.ts",
   "files": [
-    "pkg/"
+    "./pkg/*"
   ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
-    "build": "wasm-pack build --target web",
+    "build": "wasm-pack build --target web && touch pkg/.npmignore",
     "test": "cargo test",
     "prepare": "husky"
   },
