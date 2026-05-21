@@ -17,6 +17,7 @@ pub mod helpers;
 pub mod note;
 pub mod oscillator;
 pub mod param;
+pub mod ramp;
 pub mod ring_buffer;
 pub mod wav;
 
