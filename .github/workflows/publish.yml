@@ -1,18 +1,21 @@
-name: Build and Publish
+name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+      - develop
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -22,20 +25,16 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Install just
-        uses: taiki-e/install-action@just
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://npm.pkg.github.com"
 
-      - name: Build
-        run: just build
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
 
-      - name: Publish
-        working-directory: pkg
-        run: npm publish
+      - name: Release
+        run: npx semantic-release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
