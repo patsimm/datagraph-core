@@ -33,8 +33,19 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Release
+      - name: Build
+        run: npm run build
+
+      - name: Release (develop)
+        if: github.ref_name == 'develop'
         run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release (main)
+        if: github.ref_name == 'main'
+        run: npx semantic-release --extends ./.releaserc.main.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
