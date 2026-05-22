@@ -19,6 +19,8 @@ pub mod oscillator;
 pub mod param;
 pub mod ramp;
 pub mod ring_buffer;
+pub mod sequencer;
+pub mod state_machine;
 pub mod wav;
 
 #[wasm_bindgen]
@@ -142,6 +144,11 @@ pub fn create_sin(sample_rate: u32) -> GraphNode {
 #[wasm_bindgen(js_name = createSaw)]
 pub fn create_saw(sample_rate: u32) -> GraphNode {
     GraphNode::from(oscillator::Saw::new(sample_rate))
+}
+
+#[wasm_bindgen(js_name = createSequencer)]
+pub fn create_sequencer() -> GraphNode {
+    GraphNode::from(sequencer::Sequencer::default())
 }
 
 #[wasm_bindgen(js_name = createSquare)]

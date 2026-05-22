@@ -4,8 +4,9 @@ use crate::helpers::lerp;
 pub struct Ramp {
     target: f32,
     start: f32,
+    current: f32,
     duration: usize,
-    running_sample: Option<usize>,
+    running_sample: usize,
 }
 
 impl Ramp {
@@ -13,8 +14,9 @@ impl Ramp {
         Self {
             target,
             start,
+            current: start,
             duration,
-            running_sample: None,
+            running_sample: 0,
         }
     }
 
@@ -22,30 +24,22 @@ impl Ramp {
         self.duration
     }
 
-    pub fn is_active(&self) -> bool {
-        self.running_sample
-            .map(|running_sample| running_sample <= self.duration)
-            .unwrap_or(false)
+    pub fn value(&self) -> f32 {
+        self.current
     }
 
-    pub fn start(&mut self) {
-        self.running_sample = Some(0);
-    }
-
-    pub fn update(&mut self) -> Option<f32> {
-        let Some(running_sample) = self.running_sample else {
-            return None; // Ramp hasn't started yet
-        };
-        if running_sample >= self.duration {
-            self.running_sample = None;
-            return Some(self.target);
+    pub fn tick(&mut self) -> bool {
+        self.running_sample += 1;
+        if self.running_sample >= self.duration {
+            self.current = self.target;
+            return false;
         }
-        self.running_sample = Some(running_sample + 1);
-        Some(lerp(
+        self.current = lerp(
             self.start,
             self.target,
-            running_sample as f32 / self.duration as f32,
-        ))
+            self.running_sample as f32 / self.duration as f32,
+        );
+        true
     }
 }
 
@@ -55,13 +49,14 @@ mod tests {
     #[test]
     fn test_ramp() {
         let mut ramp = super::Ramp::new(0.0, 1.0, 4);
-        assert_eq!(ramp.update(), None);
-        ramp.start();
-        assert_eq!(ramp.update(), Some(0.0));
-        assert_eq!(ramp.update(), Some(0.25));
-        assert_eq!(ramp.update(), Some(0.5));
-        assert_eq!(ramp.update(), Some(0.75));
-        assert_eq!(ramp.update(), Some(1.0));
-        assert_eq!(ramp.update(), None);
+        assert_eq!(ramp.value(), 0.0);
+        assert!(ramp.tick());
+        assert_eq!(ramp.value(), 0.25);
+        assert!(ramp.tick());
+        assert_eq!(ramp.value(), 0.5);
+        assert!(ramp.tick());
+        assert_eq!(ramp.value(), 0.75);
+        assert!(!ramp.tick());
+        assert_eq!(ramp.value(), 1.0);
     }
 }

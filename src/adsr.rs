@@ -2,45 +2,95 @@ use std::time::Duration;
 
 use cpal::SampleRate;
 
-use crate::{graph::Node, helpers::ToSamples, ramp::Ramp};
+use crate::{
+    graph::Node,
+    helpers::ToSamples,
+    ramp::Ramp,
+    state_machine::{State, StateMachine},
+};
 
-#[derive(Clone, Copy)]
+struct ADSRContext {
+    gate_on: bool,
+    attack_dur: usize,
+    decay_dur: usize,
+    sustain: f32,
+    release_dur: usize,
+}
+
+#[derive(Clone, Copy, Default)]
 enum ADSRState {
+    #[default]
     Idle,
     Attack(Ramp),
     Decay(Ramp),
-    Sustain,
+    Sustain(f32),
     Release(Ramp),
 }
 
-fn step_state(state: &mut ADSRState, sustain: f32, decay_dur: usize) -> (f32, ADSRState) {
-    match *state {
-        ADSRState::Idle => (0.0, ADSRState::Idle),
-        ADSRState::Attack(mut ramp) => {
-            let v = ramp.update().unwrap_or(1.0);
-            if ramp.is_active() {
-                (v, ADSRState::Attack(ramp))
-            } else {
-                let mut decay = Ramp::new(1.0, sustain, decay_dur);
-                decay.start();
-                (v, ADSRState::Decay(decay))
-            }
+impl ADSRState {
+    fn value(&self) -> f32 {
+        match self {
+            ADSRState::Idle => 0.0,
+            ADSRState::Attack(ramp) => ramp.value(),
+            ADSRState::Decay(ramp) => ramp.value(),
+            ADSRState::Sustain(sustain) => *sustain,
+            ADSRState::Release(ramp) => ramp.value(),
         }
-        ADSRState::Decay(mut ramp) => {
-            let v = ramp.update().unwrap_or(sustain);
-            if ramp.is_active() {
-                (v, ADSRState::Decay(ramp))
-            } else {
-                (v, ADSRState::Sustain)
+    }
+}
+
+impl State<ADSRContext> for ADSRState {
+    fn tick(&mut self, context: ADSRContext) -> Self {
+        match *self {
+            ADSRState::Idle => {
+                if context.gate_on {
+                    let attack = Ramp::new(0.0, 1.0, context.attack_dur);
+                    ADSRState::Attack(attack)
+                } else {
+                    *self
+                }
             }
-        }
-        ADSRState::Sustain => (sustain, ADSRState::Sustain),
-        ADSRState::Release(mut ramp) => {
-            let v = ramp.update().unwrap_or(0.0);
-            if ramp.is_active() {
-                (v, ADSRState::Release(ramp))
-            } else {
-                (v, ADSRState::Idle)
+            ADSRState::Attack(mut ramp) => {
+                if !context.gate_on {
+                    let release = Ramp::new(ramp.value(), 0.0, context.release_dur);
+                    return ADSRState::Release(release);
+                };
+                if ramp.tick() {
+                    ADSRState::Attack(ramp)
+                } else {
+                    let decay = Ramp::new(1.0, context.sustain, context.decay_dur);
+                    ADSRState::Decay(decay)
+                }
+            }
+            ADSRState::Decay(mut ramp) => {
+                if !context.gate_on {
+                    let release = Ramp::new(ramp.value(), 0.0, context.release_dur);
+                    return ADSRState::Release(release);
+                }
+                if ramp.tick() {
+                    ADSRState::Decay(ramp)
+                } else {
+                    ADSRState::Sustain(context.sustain)
+                }
+            }
+            ADSRState::Sustain(_) => {
+                if !context.gate_on {
+                    let release = Ramp::new(context.sustain, 0.0, context.release_dur);
+                    return ADSRState::Release(release);
+                }
+                ADSRState::Sustain(context.sustain)
+            }
+            ADSRState::Release(mut ramp) => {
+                let current_value = ramp.value();
+                if context.gate_on {
+                    let attack = Ramp::new(current_value, 1.0, context.decay_dur);
+                    return ADSRState::Attack(attack);
+                }
+                if ramp.tick() {
+                    ADSRState::Release(ramp)
+                } else {
+                    ADSRState::Idle
+                }
             }
         }
     }
@@ -51,9 +101,7 @@ pub struct ADSR {
     decay_dur: usize,
     sustain: f32,
     release_dur: usize,
-    state: ADSRState,
-    prev_gate: bool,
-    last_value: f32,
+    state_machine: StateMachine<ADSRContext, ADSRState>,
 }
 
 impl ADSR {
@@ -69,31 +117,20 @@ impl ADSR {
             decay_dur: decay.to_samples(sample_rate),
             sustain,
             release_dur: release.to_samples(sample_rate),
-            state: ADSRState::Idle,
-            prev_gate: false,
-            last_value: 0.0,
+            state_machine: Default::default(),
         }
     }
 
     fn process_sample(&mut self, gate: bool) -> f32 {
-        let gate_on = gate && !self.prev_gate;
-        let gate_off = !gate && self.prev_gate;
-        self.prev_gate = gate;
-
-        if gate_on {
-            let mut ramp = Ramp::new(self.last_value, 1.0, self.attack_dur);
-            ramp.start();
-            self.state = ADSRState::Attack(ramp);
-        } else if gate_off && !matches!(self.state, ADSRState::Idle) {
-            let mut ramp = Ramp::new(self.last_value, 0.0, self.release_dur);
-            ramp.start();
-            self.state = ADSRState::Release(ramp);
-        }
-
-        let (value, next_state) = step_state(&mut self.state, self.sustain, self.decay_dur);
-        self.state = next_state;
-        self.last_value = value;
-        value
+        self.state_machine
+            .step(ADSRContext {
+                gate_on: gate,
+                attack_dur: self.attack_dur,
+                decay_dur: self.decay_dur,
+                sustain: self.sustain,
+                release_dur: self.release_dur,
+            })
+            .value()
     }
 }
 
@@ -134,8 +171,6 @@ mod tests {
         assert_eq!(out, [1.0]);
 
         // decay
-        out = adsr.process([1f32], 0);
-        assert_eq!(out, [1.0]);
         out = adsr.process([1f32], 0);
         assert_eq!(out, [0.875]);
         out = adsr.process([1f32], 0);
