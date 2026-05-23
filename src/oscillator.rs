@@ -22,9 +22,7 @@ impl OscillatorCore {
 
     pub fn advance_phase(&mut self, frequency: &Frequency) -> f32 {
         self.phi += (frequency.hz() / self.sample_rate as f32) * TAU;
-        if self.phi > TAU {
-            self.phi -= TAU;
-        }
+        self.phi = self.phi.rem_euclid(TAU);
         self.phi
     }
 }
@@ -159,6 +157,31 @@ mod tests {
             assert!(
                 osc.core.phi >= 0.0 && osc.core.phi <= TAU + f32::EPSILON,
                 "phi out of range: {}",
+                osc.core.phi
+            );
+        }
+    }
+
+    #[test]
+    fn advance_phase_stays_bounded_at_extreme_frequencies() {
+        let mut osc = Sin::new(SR);
+        // frequency higher than sample rate — phase increment > TAU per step
+        let high_cv = Frequency::from_hz(SR as f32 * 10.0).to_cv();
+        for _ in 0..SR {
+            osc.process([high_cv]);
+            assert!(
+                osc.core.phi >= 0.0 && osc.core.phi < TAU + f32::EPSILON,
+                "phi out of range at high freq: {}",
+                osc.core.phi
+            );
+        }
+        // near-zero frequency
+        let low_cv = Frequency::from_hz(0.001).to_cv();
+        for _ in 0..SR {
+            osc.process([low_cv]);
+            assert!(
+                osc.core.phi >= 0.0 && osc.core.phi < TAU + f32::EPSILON,
+                "phi out of range at low freq: {}",
                 osc.core.phi
             );
         }
