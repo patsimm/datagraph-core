@@ -36,13 +36,13 @@ impl NodeInfo {
 pub trait Node<const IN: usize, const OUT: usize> {
     const INPUT_NAMES: [&'static str; IN];
     const OUTPUT_NAMES: [&'static str; OUT];
-    fn process(&mut self, input: [f32; IN], sample_num: usize) -> [f32; OUT];
+    fn process(&mut self, input: [f32; IN]) -> [f32; OUT];
 }
 
 pub trait DynNode: Send {
     fn input_names(&self) -> &[&'static str];
     fn output_names(&self) -> &[&'static str];
-    fn process(&mut self, input: &[f32], sample_num: usize) -> Vec<f32>;
+    fn process(&mut self, input: &[f32]) -> Vec<f32>;
     fn node_type(&self) -> String;
     fn node_info(&self) -> NodeInfo {
         NodeInfo {
@@ -64,10 +64,10 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     fn output_names(&self) -> &[&'static str] {
         &T::OUTPUT_NAMES
     }
-    fn process(&mut self, input: &[f32], sample_num: usize) -> Vec<f32> {
+    fn process(&mut self, input: &[f32]) -> Vec<f32> {
         let mut in_array = [0.0; IN];
         in_array.copy_from_slice(&input[0..IN]);
-        let out_array = self.0.process(in_array, sample_num);
+        let out_array = self.0.process(in_array);
         out_array.to_vec()
     }
     fn node_type(&self) -> String {
@@ -79,6 +79,7 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
 pub struct GraphNode {
     inputs: usize,
     node: Box<dyn DynNode>,
+    input_cache: Vec<f32>,
     output_cache: Vec<f32>,
 }
 
@@ -88,11 +89,45 @@ impl GraphNode {
         T: Node<IN, OUT> + Send + 'static,
     {
         let mut node = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
-        let output_cache = node.process(&vec![0.0; IN], 0);
+        let input_cache = vec![0.0; IN];
+        let output_cache = node.process(&input_cache);
         GraphNode {
             inputs: IN,
             node,
             output_cache,
+            input_cache,
+        }
+    }
+
+    pub fn process(&mut self, input: &[f32]) {
+        self.input_cache.copy_from_slice(input);
+        self.output_cache = self.node.process(input);
+    }
+
+    pub fn output_value(&self, port: usize) -> &f32 {
+        &self.output_cache[port]
+    }
+
+    pub fn input_value(&self, port: usize) -> &f32 {
+        &self.input_cache[port]
+    }
+
+    pub fn port_value(&self, port_type: PortType, port: usize) -> Option<&f32> {
+        match port_type {
+            PortType::Input => {
+                if port < self.input_cache.len() {
+                    Some(&self.input_cache[port])
+                } else {
+                    None
+                }
+            }
+            PortType::Output => {
+                if port < self.output_cache.len() {
+                    Some(&self.output_cache[port])
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -257,14 +292,15 @@ impl Graph {
                 self.nodes[&conn.from].output_cache[conn.from_port];
         }
         for node_id in keys {
-            let inputs = &all_inputs[&node_id];
             let node = self.nodes.get_mut(&node_id).unwrap();
-            node.output_cache = node.node.process(inputs, sample_num);
+            node.process(&all_inputs[&node_id]);
         }
     }
 
-    pub fn output(&self, node_id: NodeId) -> &[f32] {
-        &self.nodes[&node_id].output_cache
+    pub fn port_value(&self, node_id: NodeId, port: usize, port_type: PortType) -> Option<&f32> {
+        self.nodes
+            .get(&node_id)
+            .and_then(|node| node.port_value(port_type, port))
     }
 }
 
@@ -451,7 +487,7 @@ pub struct Passthrough;
 impl Node<1, 1> for Passthrough {
     const INPUT_NAMES: [&'static str; 1] = ["input"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
         input
     }
 }
@@ -461,7 +497,7 @@ pub struct Add;
 impl Node<2, 1> for Add {
     const INPUT_NAMES: [&'static str; 2] = ["input1", "input2"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
         [input[0] + input[1]]
     }
 }
@@ -471,7 +507,7 @@ pub struct Multiply;
 impl Node<2, 1> for Multiply {
     const INPUT_NAMES: [&'static str; 2] = ["input1", "input2"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 2], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
         [input[0] * input[1]]
     }
 }
@@ -487,7 +523,7 @@ mod tests {
     #[test]
     fn constant_outputs_constant() {
         let param: Param = 0.5.into();
-        let output = param.node().process([], 0);
+        let output = param.node().process([]);
         assert_eq!(output, [0.5]);
     }
 
@@ -514,8 +550,10 @@ mod tests {
             .connect(constant_id2, 0, adder_id, 1)
             .expect("Failed to connect nodes");
         graph.tick(0);
-        let output = graph.output(adder_id);
-        assert_eq!(output, &[0.75]);
+        let output = graph.port_value(adder_id, 0, PortType::Output).unwrap();
+        assert_eq!(*output, 0.75);
+        let input1 = graph.port_value(adder_id, 0, PortType::Input).unwrap();
+        assert_eq!(*input1, 0.5);
     }
 
     #[test]

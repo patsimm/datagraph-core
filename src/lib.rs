@@ -3,7 +3,7 @@ use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    graph::{Graph, GraphError, GraphNode, NodeInfo},
+    graph::{Graph, GraphError, GraphNode, NodeInfo, PortType},
     param::Param,
 };
 
@@ -67,9 +67,14 @@ impl Graph {
         self.tick(sample_num);
     }
 
-    #[wasm_bindgen(js_name = output)]
-    pub fn _output(&mut self, node_id: String) -> Vec<f32> {
-        self.output(node_id.into()).to_vec()
+    #[wasm_bindgen(js_name = portValue)]
+    pub fn _port_value(
+        &mut self,
+        node_id: String,
+        port: usize,
+        port_type: PortType,
+    ) -> Option<f32> {
+        self.port_value(node_id.into(), port, port_type).copied()
     }
 
     #[wasm_bindgen(js_name = nodeInfo)]

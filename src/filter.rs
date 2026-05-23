@@ -26,7 +26,7 @@ impl OnePoleLowPass {
 impl Node<1, 1> for OnePoleLowPass {
     const INPUT_NAMES: [&'static str; 1] = ["input"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
         let result = self.alpha * input[0] + (1.0 - self.alpha) * self.prev_output;
         self.prev_output = result;
         [result]
@@ -45,15 +45,15 @@ mod tests {
     #[test]
     fn alpha_one_passes_signal_through() {
         let mut filter = OnePoleLowPass::new(1.0);
-        assert_eq!(filter.process([0.75], 0), [0.75]);
-        assert_eq!(filter.process([0.0], 1), [0.0]);
+        assert_eq!(filter.process([0.75]), [0.75]);
+        assert_eq!(filter.process([0.0]), [0.0]);
     }
 
     #[test]
     fn alpha_zero_always_outputs_zero() {
         let mut filter = OnePoleLowPass::new(0.0);
-        assert_eq!(filter.process([1.0], 0), [0.0]);
-        assert_eq!(filter.process([1.0], 1), [0.0]);
+        assert_eq!(filter.process([1.0]), [0.0]);
+        assert_eq!(filter.process([1.0]), [0.0]);
     }
 
     #[test]
@@ -61,7 +61,7 @@ mod tests {
         let mut filter = OnePoleLowPass::new(0.1);
         let mut output = 0.0;
         for i in 0..1000 {
-            output = filter.process([1.0], i)[0];
+            output = filter.process([1.0])[0];
         }
         assert!(
             (output - 1.0).abs() < 0.001,
@@ -81,7 +81,7 @@ mod tests {
 
         let mut output = 0.0;
         for i in 0..n_samples {
-            output = filter.process([1.0], i)[0];
+            output = filter.process([1.0])[0];
         }
 
         let expected = 1.0 - (-1.0_f32).exp(); // 1 - 1/e ≈ 0.6321
@@ -105,7 +105,12 @@ mod tests {
         for i in 0..10 {
             graph.tick(i);
         }
-        assert_eq!(graph.output(filter_id), &[0.0]);
+        assert_eq!(
+            *graph
+                .port_value(filter_id, 0, crate::graph::PortType::Output)
+                .unwrap(),
+            0.0
+        );
 
         // Step param to 1.0 — filter should NOT jump instantly
         // With double-buffered graph, the param cache updates on tick 10,
@@ -113,7 +118,9 @@ mod tests {
         param.set(1.0);
         graph.tick(10);
         graph.tick(11);
-        let first = graph.output(filter_id)[0];
+        let first = *graph
+            .port_value(filter_id, 0, crate::graph::PortType::Output)
+            .unwrap();
         // alpha=0.5: expected output = 0.5 * 1.0 + 0.5 * 0.0 = 0.5
         assert!(
             (first - 0.5).abs() < 0.001,
@@ -131,7 +138,9 @@ mod tests {
         for i in 12..200 {
             graph.tick(i);
         }
-        let final_out = graph.output(filter_id)[0];
+        let final_out = *graph
+            .port_value(filter_id, 0, crate::graph::PortType::Output)
+            .unwrap();
         assert!(
             (final_out - 1.0).abs() < 0.001,
             "Expected ~1.0 after settling, got {}",

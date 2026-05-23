@@ -137,7 +137,7 @@ impl ADSR {
 impl Node<1, 1> for ADSR {
     const INPUT_NAMES: [&'static str; 1] = ["gate"];
     const OUTPUT_NAMES: [&'static str; 1] = ["envelope"];
-    fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
         [self.process_sample(input[0] > 0.5)]
     }
 }
@@ -155,51 +155,51 @@ mod tests {
             0.5,
             Duration::from_secs_f32(0.25),
         );
-        let mut out = adsr.process([0f32], 0);
+        let mut out = adsr.process([0f32]);
         assert_eq!(out, [0.0]);
 
         // attack
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.0]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.25]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.5]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.75]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [1.0]);
 
         // decay
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.875]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.75]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.625]);
-        out = adsr.process([1f32], 0);
+        out = adsr.process([1f32]);
         assert_eq!(out, [0.5]);
 
         // sustain
         for _ in 0..10 {
-            out = adsr.process([1f32], 0);
+            out = adsr.process([1f32]);
             assert_eq!(out, [0.5]);
         }
 
         // release
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.5]);
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.375]);
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.25]);
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.125]);
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.0]);
 
         // idle
-        out = adsr.process([0f32], 0);
+        out = adsr.process([0f32]);
         assert_eq!(out, [0.0]);
     }
 }

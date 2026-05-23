@@ -9,7 +9,7 @@ pub struct Sequencer {
 impl Node<5, 1> for Sequencer {
     const INPUT_NAMES: [&'static str; 5] = ["gate", "1", "2", "3", "4"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, inputs: [f32; 5], _: usize) -> [f32; 1] {
+    fn process(&mut self, inputs: [f32; 5]) -> [f32; 1] {
         let curr_gate_on = inputs[0] > 0.5;
         if curr_gate_on && !self.gate_on {
             self.index = (self.index + 1) % 4;

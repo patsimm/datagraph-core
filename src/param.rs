@@ -44,7 +44,7 @@ impl From<&Param> for ParamNode {
 impl Node<0, 1> for ParamNode {
     const INPUT_NAMES: [&'static str; 0] = [];
     const OUTPUT_NAMES: [&'static str; 1] = ["value"];
-    fn process(&mut self, _: [f32; 0], _: usize) -> [f32; 1] {
+    fn process(&mut self, _: [f32; 0]) -> [f32; 1] {
         [self.0.load(std::sync::atomic::Ordering::Relaxed)]
     }
 }

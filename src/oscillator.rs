@@ -38,7 +38,7 @@ pub trait Oscillator: Node<1, 1> {
 impl<T: Oscillator> Node<1, 1> for T {
     const INPUT_NAMES: [&'static str; 1] = ["frequency"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1], _: usize) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
         let frequency = Frequency::from_cv(input[0]);
         let phi = self.core_mut().advance_phase(&frequency);
         [self.oscillate(phi)]
@@ -146,7 +146,7 @@ mod tests {
     fn process_output_is_bounded() {
         let mut osc = Sin::new(SR);
         for _ in 0..SR {
-            let [out] = osc.process([0.0], 0);
+            let [out] = osc.process([0.0]);
             assert!((-1.0..=1.0).contains(&out), "output out of range: {out}");
         }
     }
@@ -155,7 +155,7 @@ mod tests {
     fn process_phase_stays_bounded() {
         let mut osc = Sin::new(SR);
         for _ in 0..SR {
-            osc.process([0.0], 0);
+            osc.process([0.0]);
             assert!(
                 osc.core.phi >= 0.0 && osc.core.phi <= TAU + f32::EPSILON,
                 "phi out of range: {}",
@@ -170,9 +170,7 @@ mod tests {
         let cycle_len = Duration::from(Frequency::from_cv(cv)).to_samples(SR);
 
         let mut osc = Sin::new(SR);
-        let outputs: Vec<f32> = (0..cycle_len * 2)
-            .map(|_| osc.process([cv], 0)[0])
-            .collect();
+        let outputs: Vec<f32> = (0..cycle_len * 2).map(|_| osc.process([cv])[0]).collect();
 
         for i in 0..cycle_len {
             assert!(

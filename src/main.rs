@@ -5,7 +5,7 @@ use datagraph::{
     adsr::ADSR,
     delay::Delay,
     frequency::{Frequency, ToCv},
-    graph::{Graph, Multiply},
+    graph::{Graph, Multiply, PortType},
     note::Note,
     oscillator::Sin,
     param::Param,
@@ -94,7 +94,9 @@ fn main() {
                 for sample in data.iter_mut() {
                     i += 1;
                     graph.tick(i);
-                    *sample = graph.output(gain_node)[0];
+                    *sample = *graph
+                        .port_value(gain_node, 0, PortType::Output)
+                        .unwrap_or(&0.0);
                 }
             },
             move |err| {
