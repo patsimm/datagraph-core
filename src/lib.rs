@@ -4,22 +4,17 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     graph::{Graph, GraphError, GraphNode, NodeInfo, PortType},
-    param::Param,
+    nodes::param::Param,
 };
 
-pub mod adsr;
-pub mod delay;
 pub mod event_buffer;
-pub mod filter;
 pub mod frequency;
 pub mod graph;
 pub mod helpers;
+pub mod nodes;
 pub mod note;
-pub mod oscillator;
-pub mod param;
 pub mod ramp;
 pub mod ring_buffer;
-pub mod sequencer;
 pub mod state_machine;
 pub mod wav;
 
@@ -143,22 +138,22 @@ pub fn create_graph() -> Graph {
 
 #[wasm_bindgen(js_name = createSin)]
 pub fn create_sin(sample_rate: u32) -> GraphNode {
-    GraphNode::from(oscillator::Sin::new(sample_rate))
+    GraphNode::from(nodes::oscillator::Sin::new(sample_rate))
 }
 
 #[wasm_bindgen(js_name = createSaw)]
 pub fn create_saw(sample_rate: u32) -> GraphNode {
-    GraphNode::from(oscillator::Saw::new(sample_rate))
+    GraphNode::from(nodes::oscillator::Saw::new(sample_rate))
 }
 
 #[wasm_bindgen(js_name = createSequencer)]
 pub fn create_sequencer() -> GraphNode {
-    GraphNode::from(sequencer::Sequencer::default())
+    GraphNode::from(nodes::sequencer::Sequencer::default())
 }
 
 #[wasm_bindgen(js_name = createSquare)]
 pub fn create_square(sample_rate: u32) -> GraphNode {
-    GraphNode::from(oscillator::Square::new(sample_rate))
+    GraphNode::from(nodes::oscillator::Square::new(sample_rate))
 }
 
 #[wasm_bindgen(js_name = createParam)]
@@ -176,7 +171,7 @@ impl Param {
 
 #[wasm_bindgen(js_name = createMultiply)]
 pub fn create_multiply() -> GraphNode {
-    GraphNode::from(graph::Multiply)
+    GraphNode::from(nodes::multiply::Multiply)
 }
 
 #[wasm_bindgen(js_name = createADSR)]
@@ -187,7 +182,7 @@ pub fn create_adsr(
     sustain: f32,
     release: f32,
 ) -> GraphNode {
-    GraphNode::from(adsr::ADSR::new(
+    GraphNode::from(nodes::adsr::ADSR::new(
         sample_rate,
         std::time::Duration::from_secs_f32(attack),
         std::time::Duration::from_secs_f32(decay),
@@ -198,7 +193,7 @@ pub fn create_adsr(
 
 #[wasm_bindgen(js_name = createOnePoleLowPass)]
 pub fn create_one_pole_low_pass(smoothing_ms: u64, sample_rate: u32) -> GraphNode {
-    GraphNode::from(filter::OnePoleLowPass::from_smoothing_time(
+    GraphNode::from(nodes::filter::OnePoleLowPass::from_smoothing_time(
         Duration::from_millis(smoothing_ms),
         sample_rate,
     ))
@@ -206,15 +201,15 @@ pub fn create_one_pole_low_pass(smoothing_ms: u64, sample_rate: u32) -> GraphNod
 
 #[wasm_bindgen(js_name = createDelay)]
 pub fn create_delay() -> GraphNode {
-    GraphNode::from(delay::Delay::new())
+    GraphNode::from(nodes::delay::Delay::new())
 }
 
 #[wasm_bindgen(js_name = createPassthrough)]
 pub fn create_passthrough() -> GraphNode {
-    GraphNode::from(graph::Passthrough)
+    GraphNode::from(nodes::passthrough::Passthrough)
 }
 
 #[wasm_bindgen(js_name = createAdd)]
 pub fn create_add() -> GraphNode {
-    GraphNode::from(graph::Add)
+    GraphNode::from(nodes::add::Add)
 }

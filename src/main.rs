@@ -2,13 +2,10 @@ use core::f32;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use datagraph::{
-    adsr::ADSR,
-    delay::Delay,
     frequency::{Frequency, ToCv},
     graph::{Graph, Multiply, PortType},
+    nodes::{adsr::ADSR, delay::Delay, oscillator::Sin, param::Param},
     note::Note,
-    oscillator::Sin,
-    param::Param,
 };
 
 fn main() {

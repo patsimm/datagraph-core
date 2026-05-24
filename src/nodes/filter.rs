@@ -37,7 +37,7 @@ impl Node<1, 1> for OnePoleLowPass {
 mod tests {
     use crate::{
         graph::{Graph, Node},
-        param::Param,
+        nodes::param::Param,
     };
 
     use super::*;
