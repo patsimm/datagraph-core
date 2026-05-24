@@ -1,5 +1,5 @@
 use nanoid::nanoid;
-use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref};
+use std::{collections::HashMap, fmt::Display, hash::Hash, ops::Deref, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -281,7 +281,7 @@ impl Graph {
         node.port_info(port_type, port)
     }
 
-    pub fn tick(&mut self, sample_num: usize) {
+    pub fn tick(&mut self) {
         let keys: Vec<NodeId> = self.nodes.keys().cloned().collect();
         let mut all_inputs: HashMap<NodeId, Vec<f32>> = keys
             .iter()
@@ -336,7 +336,7 @@ pub enum GraphError {
 
 impl Display for GraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(match self {
+        match self {
             GraphError::NodeNotFound { node_id } => write!(f, "Node not found: {:?}", *node_id)?,
             GraphError::PortNotFound {
                 node_id,
@@ -378,7 +378,8 @@ impl Display for GraphError {
                 "Impossible connection: cannot connect output port {} of node {:?} to input port {} of node {:?}",
                 from_port, from_node_id, to_port, to_node_id
             )?,
-        })
+        };
+        Ok(())
     }
 }
 
@@ -387,7 +388,7 @@ pub struct NodeId([char; 8]);
 
 impl From<String> for NodeId {
     fn from(s: String) -> Self {
-        NodeId::from_str(&s)
+        NodeId::from_str(&s).unwrap_or(NodeId::invalid())
     }
 }
 
@@ -398,23 +399,31 @@ impl Display for NodeId {
     }
 }
 
+impl FromStr for NodeId {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 8 {
+            return Err(());
+        }
+        let chars = s.chars().collect::<Vec<_>>();
+        chars.try_into().map(NodeId).map_err(|_| ())
+    }
+}
+
 impl NodeId {
     pub fn new() -> Self {
         NodeId(nanoid!(8).chars().collect::<Vec<_>>().try_into().unwrap())
     }
 
-    pub fn from_str(s: &str) -> Self {
-        if s.len() != 8 {
-            return NodeId::invalid();
-        }
-        let chars = s.chars().collect::<Vec<_>>();
-        chars
-            .try_into()
-            .map_or_else(|_| NodeId::invalid(), |chars| NodeId(chars))
-    }
-
     pub fn invalid() -> Self {
         NodeId(['\0'; 8])
+    }
+}
+
+impl Default for NodeId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -549,7 +558,7 @@ mod tests {
         graph
             .connect(constant_id2, 0, adder_id, 1)
             .expect("Failed to connect nodes");
-        graph.tick(0);
+        graph.tick();
         let output = graph.port_value(adder_id, 0, PortType::Output).unwrap();
         assert_eq!(*output, 0.75);
         let input1 = graph.port_value(adder_id, 0, PortType::Input).unwrap();

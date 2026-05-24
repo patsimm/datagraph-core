@@ -60,7 +60,7 @@ mod tests {
     fn step_response_converges_to_target() {
         let mut filter = OnePoleLowPass::new(0.1);
         let mut output = 0.0;
-        for i in 0..1000 {
+        for _ in 0..1000 {
             output = filter.process([1.0])[0];
         }
         assert!(
@@ -80,7 +80,7 @@ mod tests {
         let mut filter = OnePoleLowPass::from_smoothing_time(time, sample_rate);
 
         let mut output = 0.0;
-        for i in 0..n_samples {
+        for _ in 0..n_samples {
             output = filter.process([1.0])[0];
         }
 
@@ -102,8 +102,8 @@ mod tests {
         graph.connect(param_id, 0, filter_id, 0).unwrap();
 
         // Settle at 0.0
-        for i in 0..10 {
-            graph.tick(i);
+        for _ in 0..10 {
+            graph.tick();
         }
         assert_eq!(
             *graph
@@ -116,8 +116,8 @@ mod tests {
         // With double-buffered graph, the param cache updates on tick 10,
         // and the filter sees the new value on tick 11.
         param.set(1.0);
-        graph.tick(10);
-        graph.tick(11);
+        graph.tick();
+        graph.tick();
         let first = *graph
             .port_value(filter_id, 0, crate::graph::PortType::Output)
             .unwrap();
@@ -135,8 +135,8 @@ mod tests {
         );
 
         // Converges to 1.0 after many ticks
-        for i in 12..200 {
-            graph.tick(i);
+        for _ in 12..200 {
+            graph.tick();
         }
         let final_out = *graph
             .port_value(filter_id, 0, crate::graph::PortType::Output)

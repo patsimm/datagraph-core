@@ -86,14 +86,12 @@ fn main() {
     //     .collect::<Vec<_>>();
     // write_wav("output.wav", &samples, config.sample_rate());
 
-    let mut i = 0;
     let stream = device
         .build_output_stream(
             &config.into(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 for sample in data.iter_mut() {
-                    i += 1;
-                    graph.tick(i);
+                    graph.tick();
                     *sample = *graph
                         .port_value(gain_node, 0, PortType::Output)
                         .unwrap_or(&0.0);

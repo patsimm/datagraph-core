@@ -63,8 +63,8 @@ impl Graph {
     }
 
     #[wasm_bindgen(js_name = tick)]
-    pub fn _tick(&mut self, sample_num: usize) {
-        self.tick(sample_num);
+    pub fn _tick(&mut self) {
+        self.tick();
     }
 
     #[wasm_bindgen(js_name = portValue)]
