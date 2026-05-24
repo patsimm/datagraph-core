@@ -18,4 +18,7 @@ impl Node<5, 1> for Sequencer {
 
         [inputs[self.index + 1]]
     }
+    fn new(_: u32) -> Self {
+        Default::default()
+    }
 }

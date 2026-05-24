@@ -8,4 +8,7 @@ impl Node<1, 1> for Passthrough {
     fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
         input
     }
+    fn new(_: u32) -> Self {
+        Self
+    }
 }

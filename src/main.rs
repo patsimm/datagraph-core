@@ -3,7 +3,7 @@ use core::f32;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use datagraph::{
     frequency::{Frequency, ToCv},
-    graph::{Graph, Multiply, PortType},
+    graph::{Graph, Multiply, Node, PortType},
     nodes::{adsr::ADSR, delay::Delay, oscillator::Sin, param::Param},
     note::Note,
 };
@@ -21,17 +21,17 @@ fn main() {
     let config = device.default_output_config().unwrap();
     println!("Default output config: {:?}", config);
 
+    let sample_rate = config.sample_rate();
+
     let mut freq = Param::from(Frequency::from(Note::C4).to_cv());
-    let osc = Sin::new(config.sample_rate());
-    let mut adsr_gate = Param::from(0.0);
-    let adsr = ADSR::new(
-        config.sample_rate(),
-        std::time::Duration::from_millis(50),
-        std::time::Duration::from_millis(20),
-        0.7,
-        std::time::Duration::from_millis(150),
-    );
-    let delay = Delay::new();
+    let osc = Sin::new(sample_rate);
+    let mut adsr_gate = Param::from(0.0_f32);
+    let adsr = ADSR::new(sample_rate);
+    let attack_param = Param::new(0.05_f32);
+    let decay_param = Param::new(0.02_f32);
+    let sustain_param = Param::new(0.7_f32);
+    let release_param = Param::new(0.15_f32);
+    let delay = Delay::new(sample_rate);
     let gain = Multiply;
 
     let mut graph = Graph::new();
@@ -42,11 +42,27 @@ fn main() {
         .expect("Failed to connect frequency to oscillator");
 
     let adsr_gate_node = graph.add(adsr_gate.node());
+    let attack_node = graph.add(attack_param.node());
+    let decay_node = graph.add(decay_param.node());
+    let sustain_node = graph.add(sustain_param.node());
+    let release_node = graph.add(release_param.node());
     let adsr_node = graph.add(adsr);
     let adsr_gain = graph.add(Multiply);
     graph
         .connect(adsr_gate_node, 0, adsr_node, 0)
         .expect("Failed to connect ADSR gate to ADSR");
+    graph
+        .connect(attack_node, 0, adsr_node, 1)
+        .expect("Failed to connect attack to ADSR");
+    graph
+        .connect(decay_node, 0, adsr_node, 2)
+        .expect("Failed to connect decay to ADSR");
+    graph
+        .connect(sustain_node, 0, adsr_node, 3)
+        .expect("Failed to connect sustain to ADSR");
+    graph
+        .connect(release_node, 0, adsr_node, 4)
+        .expect("Failed to connect release to ADSR");
     graph
         .connect(adsr_node, 0, adsr_gain, 1)
         .expect("Failed to connect ADSR to ADSR gain");
@@ -68,20 +84,6 @@ fn main() {
     graph
         .connect(delay_node, 0, gain_node, 0)
         .expect("Failed to connect delay to gain");
-
-    // let samples = (0..44100 * 5)
-    //     .map(|i| {
-    //         if i == 5000 {
-    //             adsr.start(i);
-    //         }
-    //         if i == 22050 + 5000 {
-    //             adsr.stop(i);
-    //         }
-    //         adsr.process(osc.output(i), i)
-    //     })
-    //     .map(|s| (s * i16::MAX as f32) as i16)
-    //     .collect::<Vec<_>>();
-    // write_wav("output.wav", &samples, config.sample_rate());
 
     let stream = device
         .build_output_stream(
@@ -107,17 +109,9 @@ fn main() {
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
     for i in 0..16 {
-        // event_buffer_clone
-        //     .push(event_buffer::Event::NoteOn {
-        //         frequency: *Note::from(notes[i % notes.len()]).midi().to_frequency(),
-        //     })
-        //     .expect("Failed to push event");
         freq.set(Frequency::from(Note::from(notes[i % notes.len()])).to_cv());
         adsr_gate.set(1.0);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        // event_buffer_clone
-        //     .push(event_buffer::Event::NoteOff)
-        //     .expect("Failed to push event");
         adsr_gate.set(0.0);
         std::thread::sleep(std::time::Duration::from_millis(200));
     }

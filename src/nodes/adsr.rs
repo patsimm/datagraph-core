@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use cpal::SampleRate;
-
 use crate::{
     graph::Node,
     helpers::ToSamples,
@@ -97,48 +95,48 @@ impl State<ADSRContext> for ADSRState {
 }
 
 pub struct ADSR {
-    attack_dur: usize,
-    decay_dur: usize,
-    sustain: f32,
-    release_dur: usize,
+    sample_rate: u32,
     state_machine: StateMachine<ADSRContext, ADSRState>,
 }
 
 impl ADSR {
-    pub fn new(
-        sample_rate: SampleRate,
-        attack: Duration,
-        decay: Duration,
+    fn process_sample(
+        &mut self,
+        gate: bool,
+        attack_s: f32,
+        decay_s: f32,
         sustain: f32,
-        release: Duration,
-    ) -> Self {
-        Self {
-            attack_dur: attack.to_samples(sample_rate),
-            decay_dur: decay.to_samples(sample_rate),
-            sustain,
-            release_dur: release.to_samples(sample_rate),
-            state_machine: Default::default(),
-        }
-    }
-
-    fn process_sample(&mut self, gate: bool) -> f32 {
+        release_s: f32,
+    ) -> f32 {
         self.state_machine
             .tick(ADSRContext {
                 gate_on: gate,
-                attack_dur: self.attack_dur,
-                decay_dur: self.decay_dur,
-                sustain: self.sustain,
-                release_dur: self.release_dur,
+                attack_dur: Duration::from_secs_f32(attack_s).to_samples(self.sample_rate),
+                decay_dur: Duration::from_secs_f32(decay_s).to_samples(self.sample_rate),
+                sustain,
+                release_dur: Duration::from_secs_f32(release_s).to_samples(self.sample_rate),
             })
             .value()
     }
 }
 
-impl Node<1, 1> for ADSR {
-    const INPUT_NAMES: [&'static str; 1] = ["gate"];
+impl Node<5, 1> for ADSR {
+    const INPUT_NAMES: [&'static str; 5] = [
+        "gate",
+        "attack seconds",
+        "decay seconds",
+        "sustain",
+        "release seconds",
+    ];
     const OUTPUT_NAMES: [&'static str; 1] = ["envelope"];
-    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
-        [self.process_sample(input[0] > 0.5)]
+    fn process(&mut self, input: [f32; 5]) -> [f32; 1] {
+        [self.process_sample(input[0] > 0.5, input[1], input[2], input[3], input[4])]
+    }
+    fn new(sample_rate: u32) -> Self {
+        Self {
+            sample_rate,
+            state_machine: Default::default(),
+        }
     }
 }
 
@@ -148,58 +146,40 @@ mod tests {
     #[test]
     fn test_adsr() {
         use super::*;
-        let mut adsr = ADSR::new(
-            16,
-            Duration::from_secs_f32(0.25),
-            Duration::from_secs_f32(0.25),
-            0.5,
-            Duration::from_secs_f32(0.25),
-        );
-        let mut out = adsr.process([0f32]);
-        assert_eq!(out, [0.0]);
+
+        let mut adsr = ADSR::new(16);
+
+        let gate_off = |adsr: &mut ADSR| adsr.process([0.0, 0.25, 0.25, 0.5, 0.25]);
+        let gate_on = |adsr: &mut ADSR| adsr.process([1.0, 0.25, 0.25, 0.5, 0.25]);
+
+        assert_eq!(gate_off(&mut adsr), [0.0]);
 
         // attack
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.0]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.25]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.5]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.75]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [1.0]);
+        assert_eq!(gate_on(&mut adsr), [0.0]);
+        assert_eq!(gate_on(&mut adsr), [0.25]);
+        assert_eq!(gate_on(&mut adsr), [0.5]);
+        assert_eq!(gate_on(&mut adsr), [0.75]);
+        assert_eq!(gate_on(&mut adsr), [1.0]);
 
         // decay
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.875]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.75]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.625]);
-        out = adsr.process([1f32]);
-        assert_eq!(out, [0.5]);
+        assert_eq!(gate_on(&mut adsr), [0.875]);
+        assert_eq!(gate_on(&mut adsr), [0.75]);
+        assert_eq!(gate_on(&mut adsr), [0.625]);
+        assert_eq!(gate_on(&mut adsr), [0.5]);
 
         // sustain
         for _ in 0..10 {
-            out = adsr.process([1f32]);
-            assert_eq!(out, [0.5]);
+            assert_eq!(gate_on(&mut adsr), [0.5]);
         }
 
         // release
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.5]);
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.375]);
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.25]);
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.125]);
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.0]);
+        assert_eq!(gate_off(&mut adsr), [0.5]);
+        assert_eq!(gate_off(&mut adsr), [0.375]);
+        assert_eq!(gate_off(&mut adsr), [0.25]);
+        assert_eq!(gate_off(&mut adsr), [0.125]);
+        assert_eq!(gate_off(&mut adsr), [0.0]);
 
         // idle
-        out = adsr.process([0f32]);
-        assert_eq!(out, [0.0]);
+        assert_eq!(gate_off(&mut adsr), [0.0]);
     }
 }

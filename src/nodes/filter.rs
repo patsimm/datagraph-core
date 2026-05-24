@@ -1,35 +1,27 @@
 use std::time::Duration;
 
-use cpal::SampleRate;
-
 use crate::{graph::Node, helpers::ToSamples};
 
 pub struct OnePoleLowPass {
+    sample_rate: u32,
     prev_output: f32,
-    alpha: f32,
 }
 
-impl OnePoleLowPass {
-    pub fn new(alpha: f32) -> Self {
-        Self {
-            prev_output: 0.0,
-            alpha,
-        }
-    }
-
-    pub fn from_smoothing_time(time: Duration, sample_rate: SampleRate) -> Self {
-        let alpha = 1.0 - (-1.0 / time.to_samples(sample_rate) as f32).exp();
-        Self::new(alpha)
-    }
-}
-
-impl Node<1, 1> for OnePoleLowPass {
-    const INPUT_NAMES: [&'static str; 1] = ["input"];
+impl Node<2, 1> for OnePoleLowPass {
+    const INPUT_NAMES: [&'static str; 2] = ["input", "smoothing time seconds"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
-        let result = self.alpha * input[0] + (1.0 - self.alpha) * self.prev_output;
+    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
+        let alpha = 1.0
+            - (-1.0 / Duration::from_secs_f32(input[1]).to_samples(self.sample_rate) as f32).exp();
+        let result = alpha * input[0] + (1.0 - alpha) * self.prev_output;
         self.prev_output = result;
         [result]
+    }
+    fn new(sample_rate: u32) -> Self {
+        Self {
+            sample_rate,
+            prev_output: 0.0,
+        }
     }
 }
 
@@ -43,25 +35,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alpha_one_passes_signal_through() {
-        let mut filter = OnePoleLowPass::new(1.0);
-        assert_eq!(filter.process([0.75]), [0.75]);
-        assert_eq!(filter.process([0.0]), [0.0]);
+    fn smoothing_zero_passes_signal_through() {
+        // smoothing_time=0 → alpha=1 → output equals input exactly
+        let mut filter = OnePoleLowPass::new(44100);
+        assert_eq!(filter.process([0.75, 0.0]), [0.75]);
+        assert_eq!(filter.process([0.0, 0.0]), [0.0]);
     }
 
     #[test]
-    fn alpha_zero_always_outputs_zero() {
-        let mut filter = OnePoleLowPass::new(0.0);
-        assert_eq!(filter.process([1.0]), [0.0]);
-        assert_eq!(filter.process([1.0]), [0.0]);
+    fn long_smoothing_barely_moves() {
+        // Huge smoothing time → alpha≈0 → output barely moves from 0
+        let mut filter = OnePoleLowPass::new(1);
+        let out = filter.process([1.0, 1e10])[0];
+        assert!(out < 0.001, "expected near zero, got {out}");
     }
 
     #[test]
     fn step_response_converges_to_target() {
-        let mut filter = OnePoleLowPass::new(0.1);
+        // 44-sample smoothing time → fast but non-instant convergence
+        let mut filter = OnePoleLowPass::new(44100);
         let mut output = 0.0;
-        for _ in 0..1000 {
-            output = filter.process([1.0])[0];
+        for _ in 0..10000 {
+            output = filter.process([1.0, 0.001])[0];
         }
         assert!(
             (output - 1.0).abs() < 0.001,
@@ -74,14 +69,14 @@ mod tests {
     // response of a one-pole filter reaches 1 - 1/e ≈ 63.2% of the target.
     #[test]
     fn smoothing_time_constant_reaches_63_percent_at_tau() {
-        let sample_rate: cpal::SampleRate = 44100;
+        let sample_rate: u32 = 44100;
         let n_samples: usize = 100;
-        let time = Duration::from_secs_f64(n_samples as f64 / 44100.0);
-        let mut filter = OnePoleLowPass::from_smoothing_time(time, sample_rate);
+        let time_secs = n_samples as f32 / sample_rate as f32;
+        let mut filter = OnePoleLowPass::new(sample_rate);
 
         let mut output = 0.0;
         for _ in 0..n_samples {
-            output = filter.process([1.0])[0];
+            output = filter.process([1.0, time_secs])[0];
         }
 
         let expected = 1.0 - (-1.0_f32).exp(); // 1 - 1/e ≈ 0.6321
@@ -98,8 +93,12 @@ mod tests {
         let mut graph = Graph::new();
         let mut param = Param::new(0.0);
         let param_id = graph.add(param.node());
-        let filter_id = graph.add(OnePoleLowPass::new(0.5));
+        // sample_rate=1 Hz, smoothing_secs=1.0 → n_samples=1 → alpha = 1 - 1/e ≈ 0.632
+        let filter_id = graph.add(OnePoleLowPass::new(1));
+        let smoothing_param = Param::new(1.0_f32);
+        let smoothing_id = graph.add(smoothing_param.node());
         graph.connect(param_id, 0, filter_id, 0).unwrap();
+        graph.connect(smoothing_id, 0, filter_id, 1).unwrap();
 
         // Settle at 0.0
         for _ in 0..10 {
@@ -121,11 +120,11 @@ mod tests {
         let first = *graph
             .port_value(filter_id, 0, crate::graph::PortType::Output)
             .unwrap();
-        // alpha=0.5: expected output = 0.5 * 1.0 + 0.5 * 0.0 = 0.5
+        // alpha = 1 - 1/e ≈ 0.6321: expected output = alpha * 1.0 + (1-alpha) * 0.0
+        let expected_alpha = 1.0 - (-1.0_f32).exp();
         assert!(
-            (first - 0.5).abs() < 0.001,
-            "Expected 0.5 on first tick after param change, got {}",
-            first
+            (first - expected_alpha).abs() < 0.001,
+            "Expected {expected_alpha:.4} on first tick after param change, got {first}"
         );
 
         // Filter must not have jumped straight to 1.0 — that would mean no smoothing

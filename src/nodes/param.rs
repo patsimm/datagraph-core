@@ -47,4 +47,7 @@ impl Node<0, 1> for ParamNode {
     fn process(&mut self, _: [f32; 0]) -> [f32; 1] {
         [self.0.load(std::sync::atomic::Ordering::Relaxed)]
     }
+    fn new(_: u32) -> Self {
+        Self(Arc::new(AtomicF32::new(0.0)))
+    }
 }

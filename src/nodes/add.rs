@@ -8,4 +8,7 @@ impl Node<2, 1> for Add {
     fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
         [input[0] + input[1]]
     }
+    fn new(_: u32) -> Self {
+        Self
+    }
 }

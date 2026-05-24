@@ -8,4 +8,7 @@ impl Node<2, 1> for Multiply {
     fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
         [input[0] * input[1]]
     }
+    fn new(_sample_rate: u32) -> Self {
+        Self
+    }
 }

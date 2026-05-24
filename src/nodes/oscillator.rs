@@ -1,19 +1,17 @@
 use std::f32::consts::{PI, TAU};
 
-use cpal::SampleRate;
-
 use crate::{
     frequency::{Frequency, FromCv},
     graph::Node,
 };
 
 pub struct OscillatorCore {
-    sample_rate: SampleRate,
+    sample_rate: u32,
     phi: f32,
 }
 
 impl OscillatorCore {
-    pub fn new(sample_rate: SampleRate) -> Self {
+    fn new(sample_rate: u32) -> Self {
         Self {
             sample_rate,
             phi: 0.0,
@@ -31,6 +29,7 @@ pub trait Oscillator: Node<1, 1> {
     fn core(&mut self) -> &OscillatorCore;
     fn core_mut(&mut self) -> &mut OscillatorCore;
     fn oscillate(&mut self, phi: f32) -> f32;
+    fn create(sample_rate: u32) -> Self;
 }
 
 impl<T: Oscillator> Node<1, 1> for T {
@@ -41,18 +40,13 @@ impl<T: Oscillator> Node<1, 1> for T {
         let phi = self.core_mut().advance_phase(&frequency);
         [self.oscillate(phi)]
     }
+    fn new(sample_rate: u32) -> Self {
+        <Self as Oscillator>::create(sample_rate)
+    }
 }
 
 pub struct Sin {
     core: OscillatorCore,
-}
-
-impl Sin {
-    pub fn new(sample_rate: SampleRate) -> Self {
-        Self {
-            core: OscillatorCore::new(sample_rate),
-        }
-    }
 }
 
 impl Oscillator for Sin {
@@ -67,18 +61,15 @@ impl Oscillator for Sin {
     fn core_mut(&mut self) -> &mut OscillatorCore {
         &mut self.core
     }
-}
-
-pub struct Saw {
-    core: OscillatorCore,
-}
-
-impl Saw {
-    pub fn new(sample_rate: SampleRate) -> Self {
+    fn create(sample_rate: u32) -> Self {
         Self {
             core: OscillatorCore::new(sample_rate),
         }
     }
+}
+
+pub struct Saw {
+    core: OscillatorCore,
 }
 
 impl Oscillator for Saw {
@@ -93,18 +84,15 @@ impl Oscillator for Saw {
     fn core_mut(&mut self) -> &mut OscillatorCore {
         &mut self.core
     }
-}
-
-pub struct Square {
-    core: OscillatorCore,
-}
-
-impl Square {
-    pub fn new(sample_rate: SampleRate) -> Self {
+    fn create(sample_rate: u32) -> Self {
         Self {
             core: OscillatorCore::new(sample_rate),
         }
     }
+}
+
+pub struct Square {
+    core: OscillatorCore,
 }
 
 impl Oscillator for Square {
@@ -119,6 +107,11 @@ impl Oscillator for Square {
     fn core_mut(&mut self) -> &mut OscillatorCore {
         &mut self.core
     }
+    fn create(sample_rate: u32) -> Self {
+        Self {
+            core: OscillatorCore::new(sample_rate),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -127,6 +120,7 @@ mod tests {
 
     use crate::{
         frequency::{FromHz, ToCv},
+        graph::Node,
         helpers::ToSamples,
     };
 

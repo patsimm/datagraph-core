@@ -4,20 +4,6 @@ pub struct Delay {
     ringbuf: RingBuffer<f32, 22050>,
 }
 
-impl Default for Delay {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Delay {
-    pub fn new() -> Self {
-        Self {
-            ringbuf: RingBuffer::new().flooded(0.0),
-        }
-    }
-}
-
 impl Node<1, 1> for Delay {
     const INPUT_NAMES: [&'static str; 1] = ["input"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
@@ -28,5 +14,10 @@ impl Node<1, 1> for Delay {
             .push(new_value)
             .expect("Ring buffer should never be full");
         [new_value]
+    }
+    fn new(_: u32) -> Self {
+        Self {
+            ringbuf: RingBuffer::new().flooded(0.0),
+        }
     }
 }

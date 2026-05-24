@@ -43,6 +43,7 @@ pub trait Node<const IN: usize, const OUT: usize> {
     const INPUT_NAMES: [&'static str; IN];
     const OUTPUT_NAMES: [&'static str; OUT];
     fn process(&mut self, input: [f32; IN]) -> [f32; OUT];
+    fn new(sample_rate: u32) -> Self;
 }
 
 pub trait DynNode: Send {
