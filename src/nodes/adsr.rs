@@ -40,7 +40,7 @@ impl ADSRState {
 }
 
 impl State<ADSRContext> for ADSRState {
-    fn tick(&mut self, context: ADSRContext) -> Self {
+    fn next_state(&mut self, context: ADSRContext) -> Self {
         match *self {
             ADSRState::Idle => {
                 if context.gate_on {
@@ -123,7 +123,7 @@ impl ADSR {
 
     fn process_sample(&mut self, gate: bool) -> f32 {
         self.state_machine
-            .step(ADSRContext {
+            .tick(ADSRContext {
                 gate_on: gate,
                 attack_dur: self.attack_dur,
                 decay_dur: self.decay_dur,

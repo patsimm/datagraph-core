@@ -7,6 +7,7 @@ pub struct NodeInfo {
     input_names: Vec<&'static str>,
     output_names: Vec<&'static str>,
     node_type: String,
+    default_input_values: Vec<f32>,
 }
 
 #[wasm_bindgen]
@@ -31,6 +32,11 @@ impl NodeInfo {
     pub fn node_type(&self) -> String {
         self.node_type.clone()
     }
+
+    #[wasm_bindgen(getter, js_name = defaultInputValues)]
+    pub fn default_input_values(&self) -> Vec<f32> {
+        self.default_input_values.clone()
+    }
 }
 
 pub trait Node<const IN: usize, const OUT: usize> {
@@ -44,13 +50,6 @@ pub trait DynNode: Send {
     fn output_names(&self) -> &[&'static str];
     fn process(&mut self, input: &[f32]) -> Vec<f32>;
     fn node_type(&self) -> String;
-    fn node_info(&self) -> NodeInfo {
-        NodeInfo {
-            input_names: self.input_names().to_vec(),
-            output_names: self.output_names().to_vec(),
-            node_type: self.node_type(),
-        }
-    }
 }
 
 struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T);
@@ -81,6 +80,7 @@ pub struct GraphNode {
     node: Box<dyn DynNode>,
     input_cache: Vec<f32>,
     output_cache: Vec<f32>,
+    default_inputs: Vec<f32>,
 }
 
 impl GraphNode {
@@ -89,14 +89,21 @@ impl GraphNode {
         T: Node<IN, OUT> + Send + 'static,
     {
         let mut node = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
-        let input_cache = vec![0.0; IN];
+        let default_inputs = vec![0.0; IN];
+        let input_cache = default_inputs.clone();
         let output_cache = node.process(&input_cache);
+
         GraphNode {
             inputs: IN,
             node,
             output_cache,
             input_cache,
+            default_inputs,
         }
+    }
+
+    pub fn default_inputs(&self) -> &[f32] {
+        &self.default_inputs
     }
 
     pub fn input_count(&self) -> usize {
@@ -104,7 +111,12 @@ impl GraphNode {
     }
 
     pub fn node_info(&self) -> NodeInfo {
-        self.node.node_info()
+        NodeInfo {
+            input_names: self.node.input_names().to_vec(),
+            output_names: self.node.output_names().to_vec(),
+            node_type: self.node.node_type(),
+            default_input_values: self.default_inputs.clone(),
+        }
     }
 
     pub fn process(&mut self, input: &[f32]) {
@@ -163,6 +175,12 @@ impl GraphNode {
                     None
                 }
             }
+        }
+    }
+
+    pub fn set_default_input_value(&mut self, port: usize, value: f32) {
+        if port < self.default_inputs.len() {
+            self.default_inputs[port] = value;
         }
     }
 }

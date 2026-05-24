@@ -76,6 +76,16 @@ impl Graph {
     pub fn _node_info(&self, node_id: String) -> Result<NodeInfo, GraphError> {
         self.info(node_id.into())
     }
+
+    #[wasm_bindgen(js_name = setDefaultInputValue)]
+    pub fn _set_default_input_value(
+        &mut self,
+        node_id: String,
+        port: usize,
+        value: f32,
+    ) -> Result<(), GraphError> {
+        self.set_default_input_value(node_id.into(), port, value)
+    }
 }
 
 #[wasm_bindgen]

@@ -3,10 +3,10 @@ mod node;
 mod node_id;
 mod port;
 
+pub use crate::nodes::{add::Add, multiply::Multiply, passthrough::Passthrough};
 pub use error::GraphError;
 pub use node::{DynNode, GraphNode, IntoGraphNode, Node, NodeInfo};
 pub use node_id::NodeId;
-pub use crate::nodes::{add::Add, multiply::Multiply, passthrough::Passthrough};
 pub use port::{PortInfo, PortType};
 
 use std::collections::HashMap;
@@ -120,7 +120,7 @@ impl Graph {
         let keys: Vec<NodeId> = self.nodes.keys().cloned().collect();
         let mut all_inputs: HashMap<NodeId, Vec<f32>> = keys
             .iter()
-            .map(|&id| (id, vec![0.0; self.nodes[&id].input_count()]))
+            .map(|&id| (id, self.nodes[&id].default_inputs().to_vec()))
             .collect();
         for conn in &self.connections {
             all_inputs.get_mut(&conn.to).unwrap()[conn.to_port] =
@@ -136,6 +136,21 @@ impl Graph {
         self.nodes
             .get(&node_id)
             .and_then(|node| node.port_value(port_type, port))
+    }
+
+    pub fn set_default_input_value(
+        &mut self,
+        node_id: NodeId,
+        port: usize,
+        value: f32,
+    ) -> Result<(), GraphError> {
+        assert_port_exists(self, node_id, port, PortType::Input)?;
+        if let Some(node) = self.nodes.get_mut(&node_id) {
+            node.set_default_input_value(port, value);
+            Ok(())
+        } else {
+            Err(GraphError::NodeNotFound { node_id })
+        }
     }
 }
 

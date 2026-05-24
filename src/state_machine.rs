@@ -6,7 +6,7 @@ pub struct StateMachine<C, S: State<C> + Default> {
 }
 
 pub trait State<C> {
-    fn tick(&mut self, context: C) -> Self;
+    fn next_state(&mut self, context: C) -> Self;
 }
 
 impl<C, S: State<C> + Default> Default for StateMachine<C, S> {
@@ -19,8 +19,8 @@ impl<C, S: State<C> + Default> Default for StateMachine<C, S> {
 }
 
 impl<C, S: State<C> + Default> StateMachine<C, S> {
-    pub fn step(&mut self, context: C) -> &S {
-        self.current_state = self.current_state.tick(context);
+    pub fn tick(&mut self, context: C) -> &S {
+        self.current_state = self.current_state.next_state(context);
         &self.current_state
     }
 }
