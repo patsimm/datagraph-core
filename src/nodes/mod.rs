@@ -1,16 +1,19 @@
-pub mod add;
-pub mod adsr;
-pub mod delay;
-pub mod filter;
-pub mod multiply;
-pub mod oscillator;
-pub mod param;
-pub mod passthrough;
-pub mod sequencer;
+mod add;
+mod adsr;
+mod delay;
+mod filter;
+mod multiply;
+mod noise;
+mod oscillator;
+mod param;
+mod passthrough;
+mod sequencer;
 
 use crate::graph::{CreateNode, GraphNode, Node};
 use std::collections::HashMap;
 use std::sync::OnceLock;
+
+pub use param::{Param, ParamHandle};
 
 static INSTANCE: OnceLock<NodeRegistry> = OnceLock::new();
 
@@ -41,6 +44,7 @@ impl NodeRegistry {
 macro_rules! register_nodes {
     ($($t:ty),+) => {
         $(
+            pub use $t;
             impl CreateNode for $t {
                 fn create(sample_rate: u32) -> GraphNode {
                     GraphNode::from(Self::new(sample_rate))
@@ -70,5 +74,6 @@ register_nodes!(
     sequencer::Sequencer,
     oscillator::Sin,
     oscillator::Saw,
-    oscillator::Square
+    oscillator::Square,
+    noise::Noise
 );

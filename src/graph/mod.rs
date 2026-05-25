@@ -3,8 +3,7 @@ mod node;
 mod node_id;
 mod port;
 
-use crate::nodes::param::{Param, ParamHandle};
-pub use crate::nodes::{add::Add, multiply::Multiply, passthrough::Passthrough};
+use crate::nodes::{Param, ParamHandle};
 pub use error::GraphError;
 pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo};
 pub use node_id::NodeId;
@@ -235,7 +234,7 @@ fn assert_port_is_free(
 mod tests {
     use std::any::type_name;
 
-    use crate::nodes::param::Param;
+    use crate::nodes::{Add, Param};
 
     use super::*;
 

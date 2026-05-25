@@ -137,6 +137,7 @@ dependencies = [
  "getrandom",
  "js-sys",
  "nanoid",
+ "rand",
  "wasm-bindgen",
  "web-sys",
 ]
