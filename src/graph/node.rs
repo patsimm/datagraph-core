@@ -186,14 +186,6 @@ impl GraphNode {
     }
 }
 
-pub trait IntoGraphNode<const IN: usize, const OUT: usize> {
-    fn into_graph_node(self) -> GraphNode;
-}
-
-impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send + 'static> IntoGraphNode<IN, OUT>
-    for T
-{
-    fn into_graph_node(self) -> GraphNode {
-        GraphNode::from(self)
-    }
+pub trait CreateNode: Send + 'static {
+    fn create(sample_rate: u32) -> GraphNode;
 }

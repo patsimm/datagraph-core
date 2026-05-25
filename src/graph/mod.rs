@@ -3,9 +3,10 @@ mod node;
 mod node_id;
 mod port;
 
+use crate::nodes::param::{Param, ParamHandle};
 pub use crate::nodes::{add::Add, multiply::Multiply, passthrough::Passthrough};
 pub use error::GraphError;
-pub use node::{DynNode, GraphNode, IntoGraphNode, Node, NodeInfo};
+pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo};
 pub use node_id::NodeId;
 pub use port::{PortInfo, PortType};
 
@@ -23,15 +24,24 @@ struct Connection {
 #[derive(Default)]
 pub struct Graph {
     nodes: HashMap<NodeId, GraphNode>,
+    param_handles: HashMap<NodeId, ParamHandle>,
     connections: Vec<Connection>,
+    sample_rate: u32,
 }
 
 impl Graph {
-    pub fn new() -> Self {
+    pub fn new(sample_rate: u32) -> Self {
         Self {
             nodes: HashMap::new(),
+            param_handles: HashMap::new(),
             connections: Vec::new(),
+            sample_rate,
         }
+    }
+
+    pub fn add<T: CreateNode>(&mut self) -> NodeId {
+        let graph_node = T::create(self.sample_rate);
+        self.add_node(graph_node)
     }
 
     pub fn add_node(&mut self, node: GraphNode) -> NodeId {
@@ -40,12 +50,23 @@ impl Graph {
         id
     }
 
-    pub fn add<const IN: usize, const OUT: usize>(
-        &mut self,
-        node: impl IntoGraphNode<IN, OUT> + Send + 'static,
-    ) -> NodeId {
-        let graph_node = node.into_graph_node();
-        self.add_node(graph_node)
+    pub fn add_param(&mut self, value: f32) -> NodeId {
+        let param = Param::from(value);
+        let param_handle = param.handle();
+        let graph_node = GraphNode::from(param);
+        let id = self.add_node(graph_node);
+        self.param_handles.insert(id, param_handle);
+        id
+    }
+
+    pub fn set_param_value(&mut self, node_id: NodeId, value: f32) -> Result<(), GraphError> {
+        assert_node_exists(self, node_id)?;
+        if let Some(handle) = self.param_handles.get_mut(&node_id) {
+            handle.set(value);
+            Ok(())
+        } else {
+            Err(GraphError::NotAParameter { node_id })
+        }
     }
 
     pub fn remove_node(&mut self, node: NodeId) -> Result<(), GraphError> {
@@ -214,33 +235,33 @@ fn assert_port_is_free(
 mod tests {
     use std::any::type_name;
 
-    use crate::nodes::param::{Param, ParamNode};
+    use crate::nodes::param::Param;
 
     use super::*;
 
     #[test]
     fn constant_outputs_constant() {
-        let param: Param = 0.5.into();
-        let output = param.node().process([]);
+        let mut param: Param = 0.5.into();
+        let output = param.process([]);
         assert_eq!(output, [0.5]);
     }
 
     #[test]
     fn graph_adds_nodes() {
-        let mut graph = Graph::new();
-        let constant_id1 = graph.add(Param::from(0.5).node());
+        let mut graph = Graph::new(1);
+        let constant_id1 = graph.add_param(0.5);
         assert_eq!(
             graph.info(constant_id1).unwrap().node_type(),
-            type_name::<ParamNode>()
+            type_name::<Param>()
         );
     }
 
     #[test]
     fn graph_connects_nodes() {
-        let mut graph = Graph::new();
-        let constant_id = graph.add(Param::from(0.5).node());
-        let constant_id2 = graph.add(Param::from(0.25).node());
-        let adder_id = graph.add(Add);
+        let mut graph = Graph::new(1);
+        let constant_id = graph.add_param(0.5);
+        let constant_id2 = graph.add_param(0.5);
+        let adder_id = graph.add::<Add>();
         graph
             .connect(constant_id, 0, adder_id, 0)
             .expect("Failed to connect nodes");
@@ -249,16 +270,16 @@ mod tests {
             .expect("Failed to connect nodes");
         graph.tick();
         let output = graph.port_value(adder_id, 0, PortType::Output).unwrap();
-        assert_eq!(*output, 0.75);
+        assert_eq!(*output, 1.0);
         let input1 = graph.port_value(adder_id, 0, PortType::Input).unwrap();
         assert_eq!(*input1, 0.5);
     }
 
     #[test]
     fn graph_connect_fails_when_invalid_port() {
-        let mut graph = Graph::new();
-        let constant_id = graph.add(Param::from(0.5).node());
-        let adder_id = graph.add(Add);
+        let mut graph = Graph::new(1);
+        let constant_id = graph.add_param(0.5);
+        let adder_id = graph.add::<Add>();
         let result = graph.connect(constant_id, 1, adder_id, 0);
         assert!(result.is_err());
     }

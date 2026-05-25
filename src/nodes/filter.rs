@@ -27,10 +27,7 @@ impl Node<2, 1> for OnePoleLowPass {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        graph::{Graph, Node},
-        nodes::param::Param,
-    };
+    use crate::graph::{Graph, Node};
 
     use super::*;
 
@@ -90,13 +87,11 @@ mod tests {
 
     #[test]
     fn param_change_is_smoothed_through_graph() {
-        let mut graph = Graph::new();
-        let mut param = Param::new(0.0);
-        let param_id = graph.add(param.node());
+        let mut graph = Graph::new(1);
+        let param_id = graph.add_param(0.0);
         // sample_rate=1 Hz, smoothing_secs=1.0 → n_samples=1 → alpha = 1 - 1/e ≈ 0.632
-        let filter_id = graph.add(OnePoleLowPass::new(1));
-        let smoothing_param = Param::new(1.0_f32);
-        let smoothing_id = graph.add(smoothing_param.node());
+        let filter_id = graph.add::<OnePoleLowPass>();
+        let smoothing_id = graph.add_param(1.0);
         graph.connect(param_id, 0, filter_id, 0).unwrap();
         graph.connect(smoothing_id, 0, filter_id, 1).unwrap();
 
@@ -114,7 +109,7 @@ mod tests {
         // Step param to 1.0 — filter should NOT jump instantly
         // With double-buffered graph, the param cache updates on tick 10,
         // and the filter sees the new value on tick 11.
-        param.set(1.0);
+        graph.set_param_value(param_id, 1.0).unwrap();
         graph.tick();
         graph.tick();
         let first = *graph

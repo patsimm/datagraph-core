@@ -8,6 +8,9 @@ pub enum GraphError {
     NodeNotFound {
         node_id: NodeId,
     },
+    NotAParameter {
+        node_id: NodeId,
+    },
     PortNotFound {
         node_id: NodeId,
         port: usize,
@@ -30,6 +33,9 @@ impl Display for GraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GraphError::NodeNotFound { node_id } => write!(f, "Node not found: {:?}", *node_id)?,
+            GraphError::NotAParameter { node_id } => {
+                write!(f, "Node is not a parameter: {:?}", *node_id)?
+            }
             GraphError::PortNotFound {
                 node_id,
                 port,

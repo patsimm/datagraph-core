@@ -3,45 +3,41 @@ use wasm_bindgen::prelude::*;
 
 use crate::{graph::Node, helpers::AtomicF32};
 
-#[wasm_bindgen]
-pub struct Param {
+pub struct ParamHandle {
     value: Arc<AtomicF32>,
 }
 
 impl From<f32> for Param {
     fn from(value: f32) -> Self {
-        Self {
-            value: Arc::new(AtomicF32::new(value)),
-        }
+        Self(Arc::new(AtomicF32::new(value)))
     }
 }
 
-impl Param {
-    pub fn new(value: f32) -> Self {
-        Self {
-            value: Arc::new(AtomicF32::new(value)),
-        }
-    }
-
-    pub fn node(&self) -> ParamNode {
-        ParamNode(self.value.clone())
-    }
-
+impl ParamHandle {
     pub fn set(&mut self, value: f32) {
         self.value
             .store(value, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
-pub struct ParamNode(Arc<AtomicF32>);
+#[wasm_bindgen]
+pub struct Param(Arc<AtomicF32>);
 
-impl From<&Param> for ParamNode {
+impl From<&Param> for ParamHandle {
     fn from(param: &Param) -> Self {
-        param.node()
+        param.handle()
     }
 }
 
-impl Node<0, 1> for ParamNode {
+impl Param {
+    pub fn handle(&self) -> ParamHandle {
+        ParamHandle {
+            value: self.0.clone(),
+        }
+    }
+}
+
+impl Node<0, 1> for Param {
     const INPUT_NAMES: [&'static str; 0] = [];
     const OUTPUT_NAMES: [&'static str; 1] = ["value"];
     fn process(&mut self, _: [f32; 0]) -> [f32; 1] {

@@ -1,10 +1,6 @@
 use wasm_bindgen::prelude::*;
 
-use crate::{
-    graph::{Graph, GraphError, GraphNode, NodeInfo, PortType},
-    graph::Node,
-    nodes::param::Param,
-};
+use crate::graph::{Graph, GraphError, GraphNode, NodeInfo, PortType};
 
 pub mod event_buffer;
 pub mod frequency;
@@ -27,11 +23,6 @@ impl Graph {
     #[wasm_bindgen(js_name = remove)]
     pub fn _remove(&mut self, node_id: String) -> Result<(), GraphError> {
         self.remove_node(node_id.into())
-    }
-
-    #[wasm_bindgen(js_name = addParam)]
-    pub fn _add_param(&mut self, param: &Param) -> String {
-        self.add_node(GraphNode::from(param.node())).to_string()
     }
 
     #[wasm_bindgen(js_name = connect)]
@@ -85,6 +76,16 @@ impl Graph {
     ) -> Result<(), GraphError> {
         self.set_default_input_value(node_id.into(), port, value)
     }
+
+    #[wasm_bindgen(js_name = addParam)]
+    pub fn _add_param(&mut self, value: f32) -> String {
+        self.add_param(value).to_string()
+    }
+
+    #[wasm_bindgen(js_name = setParamValue)]
+    pub fn _set_param_value(&mut self, node_id: String, value: f32) -> Result<(), GraphError> {
+        self.set_param_value(node_id.into(), value)
+    }
 }
 
 #[wasm_bindgen]
@@ -93,6 +94,7 @@ pub enum DatagraphError {
     PortNotFound = 1,
     PortAlreadyConnected = 2,
     ImpossibleConnection = 3,
+    NotAParameter = 4,
 }
 
 impl From<GraphError> for JsValue {
@@ -135,75 +137,29 @@ impl From<GraphError> for JsValue {
                 arr.push(&JsValue::from(to_node_id.to_string()));
                 arr.push(&JsValue::from(to_port));
             }
+            GraphError::NotAParameter { node_id } => {
+                arr.push(&JsValue::from(DatagraphError::NotAParameter));
+                arr.push(&JsValue::from(node_id.to_string()));
+            }
         };
         arr.into()
     }
 }
 
 #[wasm_bindgen(js_name = createGraph)]
-pub fn create_graph() -> Graph {
-    Graph::new()
+pub fn create_graph(sample_rate: u32) -> Graph {
+    Graph::new(sample_rate)
 }
 
-#[wasm_bindgen(js_name = createSin)]
-pub fn create_sin(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::oscillator::Sin::new(sample_rate))
+#[wasm_bindgen(js_name = nodeTypes)]
+pub fn node_types() -> Vec<JsValue> {
+    nodes::NodeRegistry::global()
+        .node_types()
+        .map(JsValue::from_str)
+        .collect()
 }
 
-#[wasm_bindgen(js_name = createSaw)]
-pub fn create_saw(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::oscillator::Saw::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createSequencer)]
-pub fn create_sequencer(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::sequencer::Sequencer::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createSquare)]
-pub fn create_square(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::oscillator::Square::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createParam)]
-pub fn create_param(value: f32) -> Param {
-    Param::new(value)
-}
-
-#[wasm_bindgen]
-impl Param {
-    #[wasm_bindgen(js_name = set)]
-    pub fn _set(&mut self, value: f32) {
-        self.set(value);
-    }
-}
-
-#[wasm_bindgen(js_name = createMultiply)]
-pub fn create_multiply() -> GraphNode {
-    GraphNode::from(nodes::multiply::Multiply)
-}
-
-#[wasm_bindgen(js_name = createADSR)]
-pub fn create_adsr(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::adsr::ADSR::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createOnePoleLowPass)]
-pub fn create_one_pole_low_pass(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::filter::OnePoleLowPass::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createDelay)]
-pub fn create_delay(sample_rate: u32) -> GraphNode {
-    GraphNode::from(nodes::delay::Delay::new(sample_rate))
-}
-
-#[wasm_bindgen(js_name = createPassthrough)]
-pub fn create_passthrough() -> GraphNode {
-    GraphNode::from(nodes::passthrough::Passthrough)
-}
-
-#[wasm_bindgen(js_name = createAdd)]
-pub fn create_add() -> GraphNode {
-    GraphNode::from(nodes::add::Add)
+#[wasm_bindgen(js_name = createNode)]
+pub fn create_node(typename: &str, sample_rate: u32) -> Option<GraphNode> {
+    nodes::NodeRegistry::global().create(typename, sample_rate)
 }
