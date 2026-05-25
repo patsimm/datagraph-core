@@ -1,7 +1,7 @@
 {
   "name": "@patsimm/datagraph-core",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "core of datagraph",
   "license": "MIT",
   "main": "./pkg/datagraph.js",
