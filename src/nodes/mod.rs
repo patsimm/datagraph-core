@@ -2,6 +2,8 @@ mod add;
 mod adsr;
 mod delay;
 mod filter;
+mod max;
+mod min;
 mod multiply;
 mod noise;
 mod oscillator;
@@ -75,5 +77,7 @@ register_nodes!(
     oscillator::Sin,
     oscillator::Saw,
     oscillator::Square,
-    noise::Noise
+    noise::Noise,
+    min::Min,
+    max::Max
 );
