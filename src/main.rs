@@ -3,7 +3,7 @@ use core::f32;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use datagraph::{
     frequency::{Frequency, ToCv},
-    graph::{Graph, GraphNode, PortType},
+    graph::{Graph, GraphNode, PortType, PortValueAccess, Tickable},
     nodes::{ADSR, Delay, Multiply, Param, Sin},
     note::Note,
 };

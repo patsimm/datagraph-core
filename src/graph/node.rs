@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
 
+use crate::graph::tickable::SampleProcessor;
+
 use super::port::{PortInfo, PortType};
 
 #[wasm_bindgen]
@@ -42,18 +44,29 @@ impl NodeInfo {
 pub trait Node<const IN: usize, const OUT: usize> {
     const INPUT_NAMES: [&'static str; IN];
     const OUTPUT_NAMES: [&'static str; OUT];
-    fn process(&mut self, input: [f32; IN]) -> [f32; OUT];
+    fn process(&mut self, input: [f32; IN], output: &mut [f32; OUT]);
     fn new(sample_rate: u32) -> Self;
 }
 
-pub trait DynNode: Send {
+pub trait DynNode: Send + SampleProcessor {
     fn input_names(&self) -> &[&'static str];
     fn output_names(&self) -> &[&'static str];
-    fn process(&mut self, input: &[f32]) -> Vec<f32>;
     fn node_type(&self) -> String;
 }
 
 struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T);
+
+impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> SampleProcessor
+    for DynNodeWrapper<IN, OUT, T>
+{
+    fn process_sample(&mut self, input: &[f32], output: &mut [f32]) {
+        let mut in_array = [0.0; IN];
+        in_array.copy_from_slice(&input[0..IN]);
+        let mut out_array = [0.0; OUT];
+        self.0.process(in_array, &mut out_array);
+        output.copy_from_slice(&out_array[0..OUT]);
+    }
+}
 
 impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     for DynNodeWrapper<IN, OUT, T>
@@ -64,12 +77,6 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     fn output_names(&self) -> &[&'static str] {
         &T::OUTPUT_NAMES
     }
-    fn process(&mut self, input: &[f32]) -> Vec<f32> {
-        let mut in_array = [0.0; IN];
-        in_array.copy_from_slice(&input[0..IN]);
-        let out_array = self.0.process(in_array);
-        out_array.to_vec()
-    }
     fn node_type(&self) -> String {
         std::any::type_name::<T>().to_string()
     }
@@ -79,9 +86,9 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
 pub struct GraphNode {
     inputs: usize,
     node: Box<dyn DynNode>,
-    input_cache: Vec<f32>,
-    output_cache: Vec<f32>,
-    default_inputs: Vec<f32>,
+    input_cache: Box<[f32]>,
+    output_cache: Box<[f32]>,
+    default_inputs: Box<[f32]>,
 }
 
 impl GraphNode {
@@ -90,9 +97,10 @@ impl GraphNode {
         T: Node<IN, OUT> + Send + 'static,
     {
         let mut node = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
-        let default_inputs = vec![0.0; IN];
+        let default_inputs = Box::new([0.0; IN]);
         let input_cache = default_inputs.clone();
-        let output_cache = node.process(&input_cache);
+        let mut output_cache = Box::new([0.0; OUT]);
+        node.process_sample(&*input_cache, output_cache.as_mut());
 
         GraphNode {
             inputs: IN,
@@ -111,18 +119,28 @@ impl GraphNode {
         self.inputs
     }
 
+    pub fn reset_input_cache(&mut self) {
+        self.input_cache.copy_from_slice(&self.default_inputs);
+    }
+
+    pub fn set_input_value(&mut self, index: usize, value: f32) {
+        if index < self.input_cache.len() {
+            self.input_cache[index] = value;
+        }
+    }
+
     pub fn node_info(&self) -> NodeInfo {
         NodeInfo {
             input_names: self.node.input_names().to_vec(),
             output_names: self.node.output_names().to_vec(),
             node_type: self.node.node_type(),
-            default_input_values: self.default_inputs.clone(),
+            default_input_values: (*self.default_inputs).to_vec(),
         }
     }
 
-    pub fn process(&mut self, input: &[f32]) {
-        self.input_cache.copy_from_slice(input);
-        self.output_cache = self.node.process(input);
+    pub fn tick(&mut self) {
+        self.node
+            .process_sample(&self.input_cache, self.output_cache.as_mut());
     }
 
     pub fn output_value(&self, port: usize) -> &f32 {

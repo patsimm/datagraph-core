@@ -35,10 +35,10 @@ pub trait Oscillator: Node<1, 1> {
 impl<T: Oscillator> Node<1, 1> for T {
     const INPUT_NAMES: [&'static str; 1] = ["frequency"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 1], output: &mut [f32; 1]) {
         let frequency = Frequency::from_cv(input[0]);
         let phi = self.core_mut().advance_phase(&frequency);
-        [self.oscillate(phi)]
+        output[0] = self.oscillate(phi);
     }
     fn new(sample_rate: u32) -> Self {
         <Self as Oscillator>::create(sample_rate)
@@ -137,17 +137,19 @@ mod tests {
     #[test]
     fn process_output_is_bounded() {
         let mut osc = Sin::new(SR);
+        let mut out = [0.0];
         for _ in 0..SR {
-            let [out] = osc.process([0.0]);
-            assert!((-1.0..=1.0).contains(&out), "output out of range: {out}");
+            osc.process([0.0], &mut out);
+            assert!((-1.0..=1.0).contains(&out[0]), "output out of range: {}", out[0]);
         }
     }
 
     #[test]
     fn process_phase_stays_bounded() {
         let mut osc = Sin::new(SR);
+        let mut out = [0.0];
         for _ in 0..SR {
-            osc.process([0.0]);
+            osc.process([0.0], &mut out);
             assert!(
                 osc.core.phi >= 0.0 && osc.core.phi <= TAU + f32::EPSILON,
                 "phi out of range: {}",
@@ -159,10 +161,11 @@ mod tests {
     #[test]
     fn advance_phase_stays_bounded_at_extreme_frequencies() {
         let mut osc = Sin::new(SR);
+        let mut out = [0.0];
         // frequency higher than sample rate — phase increment > TAU per step
         let high_cv = Frequency::from_hz(SR as f32 * 10.0).to_cv();
         for _ in 0..SR {
-            osc.process([high_cv]);
+            osc.process([high_cv], &mut out);
             assert!(
                 osc.core.phi >= 0.0 && osc.core.phi < TAU + f32::EPSILON,
                 "phi out of range at high freq: {}",
@@ -172,7 +175,7 @@ mod tests {
         // near-zero frequency
         let low_cv = Frequency::from_hz(0.001).to_cv();
         for _ in 0..SR {
-            osc.process([low_cv]);
+            osc.process([low_cv], &mut out);
             assert!(
                 osc.core.phi >= 0.0 && osc.core.phi < TAU + f32::EPSILON,
                 "phi out of range at low freq: {}",
@@ -187,7 +190,10 @@ mod tests {
         let cycle_len = Duration::from(Frequency::from_cv(cv)).to_samples(SR);
 
         let mut osc = Sin::new(SR);
-        let outputs: Vec<f32> = (0..cycle_len * 2).map(|_| osc.process([cv])[0]).collect();
+        let mut out = [0.0];
+        let outputs: Vec<f32> = (0..cycle_len * 2)
+            .map(|_| { osc.process([cv], &mut out); out[0] })
+            .collect();
 
         for i in 0..cycle_len {
             assert!(

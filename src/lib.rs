@@ -1,6 +1,11 @@
+use std::{collections::HashMap, str::FromStr};
+
+use js_sys::{Float32Array, Map};
 use wasm_bindgen::prelude::*;
 
-use crate::graph::{Graph, GraphError, GraphNode, NodeInfo, PortType};
+use crate::graph::{
+    BatchTickable, Graph, GraphError, GraphNode, NodeInfo, PortKey, PortType, PortValueAccess,
+};
 
 pub mod event_buffer;
 pub mod frequency;
@@ -47,9 +52,58 @@ impl Graph {
         self.disconnect(from.into(), from_port, to.into(), to_port)
     }
 
-    #[wasm_bindgen(js_name = tick)]
-    pub fn _tick(&mut self) {
-        self.tick();
+    #[wasm_bindgen(js_name = processBatch)]
+    pub fn _process_batch(&mut self, output_ports: Map) -> Result<(), GraphError> {
+        if output_ports.size() == 0 {
+            return Ok(());
+        }
+
+        let mut parse_error: Option<GraphError> = None;
+        let mut entries: Vec<(PortKey, Float32Array)> = Vec::new();
+        let mut batchsize = 0usize;
+
+        output_ports.for_each(&mut |value, key| {
+            if parse_error.is_some() {
+                return;
+            }
+            let key_str = key.as_string().unwrap_or_default();
+            let arr: Float32Array = value.into();
+            if batchsize == 0 {
+                batchsize = arr.length() as usize;
+            }
+            match PortKey::from_str(&key_str) {
+                Ok(port_key) => entries.push((port_key, arr)),
+                Err(e) => parse_error = Some(e),
+            }
+        });
+
+        if let Some(e) = parse_error {
+            return Err(e);
+        }
+
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let mut batch_buffer = std::mem::take(&mut self.batch_buffer);
+        let total = entries.len() * batchsize;
+        batch_buffer.resize(total, 0.0);
+
+        let mut outputs: HashMap<PortKey, &mut [f32]> = entries
+            .iter()
+            .zip(batch_buffer.chunks_mut(batchsize))
+            .map(|((key, _), chunk)| (*key, chunk))
+            .collect();
+        self.tick_batch(&mut outputs);
+
+        for (port_key, arr) in entries.iter() {
+            arr.copy_from(outputs[port_key]);
+        }
+
+        drop(outputs);
+        self.batch_buffer = batch_buffer;
+
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = portValue)]
@@ -95,6 +149,7 @@ pub enum DatagraphError {
     PortAlreadyConnected = 2,
     ImpossibleConnection = 3,
     NotAParameter = 4,
+    InvalidPortKey = 5,
 }
 
 impl From<GraphError> for JsValue {
@@ -140,6 +195,10 @@ impl From<GraphError> for JsValue {
             GraphError::NotAParameter { node_id } => {
                 arr.push(&JsValue::from(DatagraphError::NotAParameter));
                 arr.push(&JsValue::from(node_id.to_string()));
+            }
+            GraphError::InvalidPortKey { key } => {
+                arr.push(&JsValue::from(DatagraphError::InvalidPortKey));
+                arr.push(&JsValue::from_str(&key));
             }
         };
         arr.into()

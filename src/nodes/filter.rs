@@ -10,12 +10,12 @@ pub struct OnePoleLowPass {
 impl Node<2, 1> for OnePoleLowPass {
     const INPUT_NAMES: [&'static str; 2] = ["input", "smoothing time seconds"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 2], output: &mut [f32; 1]) {
         let alpha = 1.0
             - (-1.0 / Duration::from_secs_f32(input[1]).to_samples(self.sample_rate) as f32).exp();
         let result = alpha * input[0] + (1.0 - alpha) * self.prev_output;
         self.prev_output = result;
-        [result]
+        output[0] = result;
     }
     fn new(sample_rate: u32) -> Self {
         Self {
@@ -27,7 +27,7 @@ impl Node<2, 1> for OnePoleLowPass {
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::{Graph, Node};
+    use crate::graph::{Graph, Node, PortValueAccess, Tickable};
 
     use super::*;
 
@@ -35,15 +35,20 @@ mod tests {
     fn smoothing_zero_passes_signal_through() {
         // smoothing_time=0 → alpha=1 → output equals input exactly
         let mut filter = OnePoleLowPass::new(44100);
-        assert_eq!(filter.process([0.75, 0.0]), [0.75]);
-        assert_eq!(filter.process([0.0, 0.0]), [0.0]);
+        let mut out = [0.0];
+        filter.process([0.75, 0.0], &mut out);
+        assert_eq!(out, [0.75]);
+        filter.process([0.0, 0.0], &mut out);
+        assert_eq!(out, [0.0]);
     }
 
     #[test]
     fn long_smoothing_barely_moves() {
         // Huge smoothing time → alpha≈0 → output barely moves from 0
         let mut filter = OnePoleLowPass::new(1);
-        let out = filter.process([1.0, 1e10])[0];
+        let mut out = [0.0];
+        filter.process([1.0, 1e10], &mut out);
+        let out = out[0];
         assert!(out < 0.001, "expected near zero, got {out}");
     }
 
@@ -51,10 +56,11 @@ mod tests {
     fn step_response_converges_to_target() {
         // 44-sample smoothing time → fast but non-instant convergence
         let mut filter = OnePoleLowPass::new(44100);
-        let mut output = 0.0;
+        let mut out = [0.0];
         for _ in 0..10000 {
-            output = filter.process([1.0, 0.001])[0];
+            filter.process([1.0, 0.001], &mut out);
         }
+        let output = out[0];
         assert!(
             (output - 1.0).abs() < 0.001,
             "Expected ~1.0, got {}",
@@ -71,10 +77,11 @@ mod tests {
         let time_secs = n_samples as f32 / sample_rate as f32;
         let mut filter = OnePoleLowPass::new(sample_rate);
 
-        let mut output = 0.0;
+        let mut out = [0.0];
         for _ in 0..n_samples {
-            output = filter.process([1.0, time_secs])[0];
+            filter.process([1.0, time_secs], &mut out);
         }
+        let output = out[0];
 
         let expected = 1.0 - (-1.0_f32).exp(); // 1 - 1/e ≈ 0.6321
         assert!(

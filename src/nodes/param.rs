@@ -40,8 +40,8 @@ impl Param {
 impl Node<0, 1> for Param {
     const INPUT_NAMES: [&'static str; 0] = [];
     const OUTPUT_NAMES: [&'static str; 1] = ["value"];
-    fn process(&mut self, _: [f32; 0]) -> [f32; 1] {
-        [self.0.load(std::sync::atomic::Ordering::Relaxed)]
+    fn process(&mut self, _: [f32; 0], output: &mut [f32; 1]) {
+        output[0] = self.0.load(std::sync::atomic::Ordering::Relaxed);
     }
     fn new(_: u32) -> Self {
         Self(Arc::new(AtomicF32::new(0.0)))

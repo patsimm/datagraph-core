@@ -27,6 +27,9 @@ pub enum GraphError {
         to_node_id: NodeId,
         to_port: usize,
     },
+    InvalidPortKey {
+        key: String,
+    },
 }
 
 impl Display for GraphError {
@@ -76,6 +79,7 @@ impl Display for GraphError {
                 "Impossible connection: cannot connect output port {} of node {:?} to input port {} of node {:?}",
                 from_port, from_node_id, to_port, to_node_id
             )?,
+            GraphError::InvalidPortKey { key } => write!(f, "Invalid port key: {}", key)?,
         };
         Ok(())
     }

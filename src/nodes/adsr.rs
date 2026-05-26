@@ -129,8 +129,8 @@ impl Node<5, 1> for ADSR {
         "release seconds",
     ];
     const OUTPUT_NAMES: [&'static str; 1] = ["envelope"];
-    fn process(&mut self, input: [f32; 5]) -> [f32; 1] {
-        [self.process_sample(input[0] > 0.5, input[1], input[2], input[3], input[4])]
+    fn process(&mut self, input: [f32; 5], output: &mut [f32; 1]) {
+        output[0] = self.process_sample(input[0] > 0.5, input[1], input[2], input[3], input[4]);
     }
     fn new(sample_rate: u32) -> Self {
         Self {
@@ -149,8 +149,16 @@ mod tests {
 
         let mut adsr = ADSR::new(16);
 
-        let gate_off = |adsr: &mut ADSR| adsr.process([0.0, 0.25, 0.25, 0.5, 0.25]);
-        let gate_on = |adsr: &mut ADSR| adsr.process([1.0, 0.25, 0.25, 0.5, 0.25]);
+        let gate_off = |adsr: &mut ADSR| {
+            let mut out = [0.0];
+            adsr.process([0.0, 0.25, 0.25, 0.5, 0.25], &mut out);
+            out
+        };
+        let gate_on = |adsr: &mut ADSR| {
+            let mut out = [0.0];
+            adsr.process([1.0, 0.25, 0.25, 0.5, 0.25], &mut out);
+            out
+        };
 
         assert_eq!(gate_off(&mut adsr), [0.0]);
 

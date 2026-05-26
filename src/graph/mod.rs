@@ -2,12 +2,14 @@ mod error;
 mod node;
 mod node_id;
 mod port;
+mod tickable;
 
 use crate::nodes::{Param, ParamHandle};
 pub use error::GraphError;
 pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo};
 pub use node_id::NodeId;
 pub use port::{PortInfo, PortType};
+pub use tickable::{BatchTickable, PortKey, PortValueAccess, PortValueBuffer, Tickable};
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -26,6 +28,7 @@ pub struct Graph {
     param_handles: HashMap<NodeId, ParamHandle>,
     connections: Vec<Connection>,
     sample_rate: u32,
+    pub(crate) batch_buffer: Vec<f32>,
 }
 
 impl Graph {
@@ -35,6 +38,7 @@ impl Graph {
             param_handles: HashMap::new(),
             connections: Vec::new(),
             sample_rate,
+            batch_buffer: Vec::new(),
         }
     }
 
@@ -136,28 +140,6 @@ impl Graph {
         node.port_info(port_type, port)
     }
 
-    pub fn tick(&mut self) {
-        let keys: Vec<NodeId> = self.nodes.keys().cloned().collect();
-        let mut all_inputs: HashMap<NodeId, Vec<f32>> = keys
-            .iter()
-            .map(|&id| (id, self.nodes[&id].default_inputs().to_vec()))
-            .collect();
-        for conn in &self.connections {
-            all_inputs.get_mut(&conn.to).unwrap()[conn.to_port] =
-                *self.nodes[&conn.from].output_value(conn.from_port);
-        }
-        for node_id in keys {
-            let node = self.nodes.get_mut(&node_id).unwrap();
-            node.process(&all_inputs[&node_id]);
-        }
-    }
-
-    pub fn port_value(&self, node_id: NodeId, port: usize, port_type: PortType) -> Option<&f32> {
-        self.nodes
-            .get(&node_id)
-            .and_then(|node| node.port_value(port_type, port))
-    }
-
     pub fn set_default_input_value(
         &mut self,
         node_id: NodeId,
@@ -171,6 +153,32 @@ impl Graph {
         } else {
             Err(GraphError::NodeNotFound { node_id })
         }
+    }
+}
+
+impl Tickable for Graph {
+    fn tick(&mut self) {
+        for (_, node) in &mut self.nodes.iter_mut() {
+            node.reset_input_cache();
+        }
+        for conn in &self.connections {
+            let value = *self.nodes[&conn.from].output_value(conn.from_port);
+            self.nodes
+                .get_mut(&conn.to)
+                .unwrap()
+                .set_input_value(conn.to_port, value);
+        }
+        for (_, node) in &mut self.nodes.iter_mut() {
+            node.tick();
+        }
+    }
+}
+
+impl PortValueAccess for Graph {
+    fn port_value(&self, node_id: NodeId, port: usize, port_type: PortType) -> Option<&f32> {
+        self.nodes
+            .get(&node_id)
+            .and_then(|node| node.port_value(port_type, port))
     }
 }
 
@@ -241,7 +249,8 @@ mod tests {
     #[test]
     fn constant_outputs_constant() {
         let mut param: Param = 0.5.into();
-        let output = param.process([]);
+        let mut output = [0.0; 1];
+        param.process([], &mut output);
         assert_eq!(output, [0.5]);
     }
 

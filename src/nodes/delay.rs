@@ -11,7 +11,7 @@ pub struct Delay {
 impl Node<2, 1> for Delay {
     const INPUT_NAMES: [&'static str; 2] = ["input", "delay time ms"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
+    fn process(&mut self, input: [f32; 2], output: &mut [f32; 1]) {
         let delay_samples = input[1].max(0.0) as usize * self.sample_rate as usize / 1000;
         if delay_samples != self.last_delay_samples {
             let offset = self.last_delay_samples as isize - delay_samples as isize;
@@ -21,11 +21,10 @@ impl Node<2, 1> for Delay {
         self.ringbuf
             .push(input[0])
             .expect("Ring buffer should never be full");
-        let old_value = self
+        output[0] = self
             .ringbuf
             .pop()
             .expect("Ring buffer should never be empty");
-        [old_value]
     }
     fn new(sample_rate: u32) -> Self {
         let buffer_size = sample_rate as usize * MAX_SECONDS;
@@ -46,9 +45,13 @@ mod tests {
         use super::*;
         use crate::graph::Node;
         let mut delay = Delay::new(1000);
-        assert_eq!(delay.process([1.0, 0.0]), [1.0]);
-        assert_eq!(delay.process([0.5, 0.0]), [0.5]);
-        assert_eq!(delay.process([0.0, 0.0]), [0.0]);
+        let mut out = [0.0];
+        delay.process([1.0, 0.0], &mut out);
+        assert_eq!(out, [1.0]);
+        delay.process([0.5, 0.0], &mut out);
+        assert_eq!(out, [0.5]);
+        delay.process([0.0, 0.0], &mut out);
+        assert_eq!(out, [0.0]);
     }
 
     #[test]
@@ -56,18 +59,22 @@ mod tests {
         use super::*;
         use crate::graph::Node;
         let mut delay = Delay::new(1000); // 1ms = 1 sample at 1000Hz
+        let mut out = [0.0];
 
         // First 100 samples: pre-filled silence passes through the delay buffer
         for _ in 0..100 {
-            assert_eq!(delay.process([1.0, 100.0]), [0.0]);
+            delay.process([1.0, 100.0], &mut out);
+            assert_eq!(out, [0.0]);
         }
 
         // Next 100 samples: the 1.0 inputs from 100ms ago come out
         for _ in 0..100 {
-            assert_eq!(delay.process([0.0, 100.0]), [1.0]);
+            delay.process([0.0, 100.0], &mut out);
+            assert_eq!(out, [1.0]);
         }
 
         // Silence again once the delayed signal drains
-        assert_eq!(delay.process([0.0, 100.0]), [0.0]);
+        delay.process([0.0, 100.0], &mut out);
+        assert_eq!(out, [0.0]);
     }
 }
