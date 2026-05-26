@@ -1,23 +1,73 @@
 use crate::{graph::Node, ring_buffer::RingBuffer};
 
+const MAX_SECONDS: usize = 5;
+
 pub struct Delay {
-    ringbuf: RingBuffer<f32, 22050>,
+    sample_rate: u32,
+    ringbuf: RingBuffer<f32>,
+    last_delay_samples: usize,
 }
 
-impl Node<1, 1> for Delay {
-    const INPUT_NAMES: [&'static str; 1] = ["input"];
+impl Node<2, 1> for Delay {
+    const INPUT_NAMES: [&'static str; 2] = ["input", "delay time ms"];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
-    fn process(&mut self, input: [f32; 1]) -> [f32; 1] {
-        let old_value = self.ringbuf.pop().unwrap_or(0.0);
-        let new_value = input[0] + old_value * 0.6;
-        self.ringbuf
-            .push(new_value)
-            .expect("Ring buffer should never be full");
-        [new_value]
-    }
-    fn new(_: u32) -> Self {
-        Self {
-            ringbuf: RingBuffer::new().flooded(0.0),
+    fn process(&mut self, input: [f32; 2]) -> [f32; 1] {
+        let delay_samples = input[1].max(0.0) as usize * self.sample_rate as usize / 1000;
+        if delay_samples != self.last_delay_samples {
+            let offset = self.last_delay_samples as isize - delay_samples as isize;
+            self.ringbuf.move_read_index(offset);
+            self.last_delay_samples = delay_samples;
         }
+        self.ringbuf
+            .push(input[0])
+            .expect("Ring buffer should never be full");
+        let old_value = self
+            .ringbuf
+            .pop()
+            .expect("Ring buffer should never be empty");
+        [old_value]
+    }
+    fn new(sample_rate: u32) -> Self {
+        let buffer_size = sample_rate as usize * MAX_SECONDS;
+        let ringbuf = RingBuffer::new(buffer_size).flooded(0.0);
+        ringbuf.move_read_index((buffer_size - 1) as isize);
+        Self {
+            sample_rate,
+            ringbuf,
+            last_delay_samples: 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_zero_delay() {
+        use super::*;
+        use crate::graph::Node;
+        let mut delay = Delay::new(1000);
+        assert_eq!(delay.process([1.0, 0.0]), [1.0]);
+        assert_eq!(delay.process([0.5, 0.0]), [0.5]);
+        assert_eq!(delay.process([0.0, 0.0]), [0.0]);
+    }
+
+    #[test]
+    fn test_100ms_delay() {
+        use super::*;
+        use crate::graph::Node;
+        let mut delay = Delay::new(1000); // 1ms = 1 sample at 1000Hz
+
+        // First 100 samples: pre-filled silence passes through the delay buffer
+        for _ in 0..100 {
+            assert_eq!(delay.process([1.0, 100.0]), [0.0]);
+        }
+
+        // Next 100 samples: the 1.0 inputs from 100ms ago come out
+        for _ in 0..100 {
+            assert_eq!(delay.process([0.0, 100.0]), [1.0]);
+        }
+
+        // Silence again once the delayed signal drains
+        assert_eq!(delay.process([0.0, 100.0]), [0.0]);
     }
 }

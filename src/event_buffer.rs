@@ -6,4 +6,4 @@ pub enum Event {
     NoteOff,
 }
 
-pub type EventBuffer = RingBuffer<Event, 16>;
+pub type EventBuffer = RingBuffer<Event>;
