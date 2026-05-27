@@ -1,14 +1,12 @@
 use wasm_bindgen::prelude::*;
 
-use crate::graph::tickable::SampleProcessor;
-
 use super::port::{PortInfo, PortType};
 
 #[wasm_bindgen]
 pub struct NodeInfo {
     input_names: Vec<&'static str>,
     output_names: Vec<&'static str>,
-    node_type: String,
+    node_type: &'static str,
     default_input_values: Vec<f32>,
 }
 
@@ -32,7 +30,7 @@ impl NodeInfo {
 
     #[wasm_bindgen(getter, js_name = nodeType)]
     pub fn node_type(&self) -> String {
-        self.node_type.clone()
+        self.node_type.to_string()
     }
 
     #[wasm_bindgen(getter, js_name = defaultInputValues)]
@@ -48,15 +46,20 @@ pub trait Node<const IN: usize, const OUT: usize> {
     fn new(sample_rate: u32) -> Self;
 }
 
-pub trait DynNode: Send + SampleProcessor {
-    fn input_names(&self) -> &[&'static str];
-    fn output_names(&self) -> &[&'static str];
-    fn node_type(&self) -> String;
+pub struct NodeMeta {
+    pub input_names: &'static [&'static str],
+    pub output_names: &'static [&'static str],
+    pub node_type: &'static str,
+}
+
+pub trait DynNode: Send {
+    fn process_sample(&mut self, inputs: &[f32], outputs: &mut [f32]);
+    fn meta(&self) -> NodeMeta;
 }
 
 struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T);
 
-impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> SampleProcessor
+impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
     for DynNodeWrapper<IN, OUT, T>
 {
     fn process_sample(&mut self, input: &[f32], output: &mut [f32]) {
@@ -66,25 +69,18 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> SampleProcessor
         self.0.process(in_array, &mut out_array);
         output.copy_from_slice(&out_array[0..OUT]);
     }
-}
 
-impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
-    for DynNodeWrapper<IN, OUT, T>
-{
-    fn input_names(&self) -> &[&'static str] {
-        &T::INPUT_NAMES
-    }
-    fn output_names(&self) -> &[&'static str] {
-        &T::OUTPUT_NAMES
-    }
-    fn node_type(&self) -> String {
-        std::any::type_name::<T>().to_string()
+    fn meta(&self) -> NodeMeta {
+        NodeMeta {
+            input_names: &T::INPUT_NAMES,
+            output_names: &T::OUTPUT_NAMES,
+            node_type: std::any::type_name::<T>(),
+        }
     }
 }
 
 #[wasm_bindgen]
 pub struct GraphNode {
-    inputs: usize,
     node: Box<dyn DynNode>,
     input_cache: Box<[f32]>,
     output_cache: Box<[f32]>,
@@ -92,18 +88,17 @@ pub struct GraphNode {
 }
 
 impl GraphNode {
-    pub fn from<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
+    pub fn new<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
     where
         T: Node<IN, OUT> + Send + 'static,
     {
-        let mut node = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
+        let mut node: Box<dyn DynNode> = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
         let default_inputs = Box::new([0.0; IN]);
         let input_cache = default_inputs.clone();
         let mut output_cache = Box::new([0.0; OUT]);
         node.process_sample(&*input_cache, output_cache.as_mut());
 
         GraphNode {
-            inputs: IN,
             node,
             output_cache,
             input_cache,
@@ -116,7 +111,7 @@ impl GraphNode {
     }
 
     pub fn input_count(&self) -> usize {
-        self.inputs
+        self.input_cache.len()
     }
 
     pub fn reset_input_cache(&mut self) {
@@ -130,10 +125,11 @@ impl GraphNode {
     }
 
     pub fn node_info(&self) -> NodeInfo {
+        let meta = self.node.meta();
         NodeInfo {
-            input_names: self.node.input_names().to_vec(),
-            output_names: self.node.output_names().to_vec(),
-            node_type: self.node.node_type(),
+            input_names: meta.input_names.to_vec(),
+            output_names: meta.output_names.to_vec(),
+            node_type: meta.node_type,
             default_input_values: (*self.default_inputs).to_vec(),
         }
     }
@@ -171,30 +167,16 @@ impl GraphNode {
     }
 
     pub fn port_info(&self, port_type: PortType, port: usize) -> Option<PortInfo> {
-        match port_type {
-            PortType::Input => {
-                if port < self.node.input_names().len() {
-                    Some(PortInfo {
-                        port_index: port,
-                        port_type: PortType::Input,
-                        name: self.node.input_names().get(port).copied().unwrap_or(""),
-                    })
-                } else {
-                    None
-                }
-            }
-            PortType::Output => {
-                if port < self.node.output_names().len() {
-                    Some(PortInfo {
-                        port_index: port,
-                        port_type: PortType::Output,
-                        name: self.node.output_names().get(port).copied().unwrap_or(""),
-                    })
-                } else {
-                    None
-                }
-            }
-        }
+        let meta = self.node.meta();
+        let names = match port_type {
+            PortType::Input => meta.input_names,
+            PortType::Output => meta.output_names,
+        };
+        names.get(port).map(|&name| PortInfo {
+            port_index: port,
+            port_type,
+            name,
+        })
     }
 
     pub fn set_default_input_value(&mut self, port: usize, value: f32) {

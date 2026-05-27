@@ -26,7 +26,6 @@ impl OscillatorCore {
 }
 
 pub trait Oscillator: Node<1, 1> {
-    fn core(&mut self) -> &OscillatorCore;
     fn core_mut(&mut self) -> &mut OscillatorCore;
     fn oscillate(&mut self, phi: f32) -> f32;
     fn create(sample_rate: u32) -> Self;
@@ -54,10 +53,6 @@ impl Oscillator for Sin {
         f32::sin(phi)
     }
 
-    fn core(&mut self) -> &OscillatorCore {
-        &self.core
-    }
-
     fn core_mut(&mut self) -> &mut OscillatorCore {
         &mut self.core
     }
@@ -77,10 +72,6 @@ impl Oscillator for Saw {
         2.0 * (phi / TAU) - 1.0
     }
 
-    fn core(&mut self) -> &OscillatorCore {
-        &self.core
-    }
-
     fn core_mut(&mut self) -> &mut OscillatorCore {
         &mut self.core
     }
@@ -98,10 +89,6 @@ pub struct Square {
 impl Oscillator for Square {
     fn oscillate(&mut self, phi: f32) -> f32 {
         if phi < PI { 1.0 } else { -1.0 }
-    }
-
-    fn core(&mut self) -> &OscillatorCore {
-        &self.core
     }
 
     fn core_mut(&mut self) -> &mut OscillatorCore {

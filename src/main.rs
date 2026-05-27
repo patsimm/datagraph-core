@@ -31,13 +31,13 @@ fn main() {
 
     let mut graph = Graph::new(sample_rate);
 
-    let freq_node = graph.add_node(GraphNode::from(freq_param));
+    let freq_node = graph.add_node(GraphNode::new(freq_param));
     let osc_node = graph.add::<Sin>();
     graph
         .connect(freq_node, 0, osc_node, 0)
         .expect("Failed to connect frequency to oscillator");
 
-    let adsr_gate_node = graph.add_node(GraphNode::from(gate_param));
+    let adsr_gate_node = graph.add_node(GraphNode::new(gate_param));
     let attack_node = graph.add_param(0.05);
     let decay_node = graph.add_param(0.02);
     let sustain_node = graph.add_param(0.7);

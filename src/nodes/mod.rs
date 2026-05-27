@@ -49,7 +49,7 @@ macro_rules! register_nodes {
             pub use $t;
             impl CreateNode for $t {
                 fn create(sample_rate: u32) -> GraphNode {
-                    GraphNode::from(Self::new(sample_rate))
+                    GraphNode::new(Self::new(sample_rate))
                 }
             }
         )+

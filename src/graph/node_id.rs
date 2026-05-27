@@ -4,9 +4,10 @@ use std::{fmt::Display, ops::Deref, str::FromStr};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NodeId([char; 8]);
 
-impl From<String> for NodeId {
-    fn from(s: String) -> Self {
-        NodeId::from_str(&s).unwrap_or(NodeId::invalid())
+impl TryFrom<String> for NodeId {
+    type Error = ();
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        NodeId::from_str(&s)
     }
 }
 
@@ -32,10 +33,6 @@ impl FromStr for NodeId {
 impl NodeId {
     pub fn new() -> Self {
         NodeId(nanoid!(8).chars().collect::<Vec<_>>().try_into().unwrap())
-    }
-
-    pub fn invalid() -> Self {
-        NodeId(['\0'; 8])
     }
 }
 

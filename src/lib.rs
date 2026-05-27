@@ -1,10 +1,11 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
-use js_sys::{Float32Array, Map};
+use js_sys::Float32Array;
 use wasm_bindgen::prelude::*;
 
 use crate::graph::{
-    BatchTickable, Graph, GraphError, GraphNode, NodeInfo, PortKey, PortType, PortValueAccess,
+    BatchTickable, Graph, GraphError, GraphNode, NodeId, NodeInfo, PortKey, PortType,
+    PortValueAccess,
 };
 
 pub mod event_buffer;
@@ -27,7 +28,8 @@ impl Graph {
 
     #[wasm_bindgen(js_name = remove)]
     pub fn _remove(&mut self, node_id: String) -> Result<(), GraphError> {
-        self.remove_node(node_id.into())
+        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        self.remove_node(id)
     }
 
     #[wasm_bindgen(js_name = connect)]
@@ -38,7 +40,9 @@ impl Graph {
         to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.connect(from.into(), from_port, to.into(), to_port)
+        let from_id = from.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: from })?;
+        let to_id = to.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: to })?;
+        self.connect(from_id, from_port, to_id, to_port)
     }
 
     #[wasm_bindgen(js_name = disconnect)]
@@ -49,59 +53,39 @@ impl Graph {
         to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        self.disconnect(from.into(), from_port, to.into(), to_port)
+        let from_id = from.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: from })?;
+        let to_id = to.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: to })?;
+        self.disconnect(from_id, from_port, to_id, to_port)
     }
 
     #[wasm_bindgen(js_name = processBatch)]
-    pub fn _process_batch(&mut self, output_ports: Map) -> Result<(), GraphError> {
-        if output_ports.size() == 0 {
+    pub fn _process_batch(
+        &mut self,
+        output_ports: Vec<String>,
+        output_buffers: Vec<Float32Array>,
+    ) -> Result<(), GraphError> {
+        assert!(
+            output_ports.len() == output_buffers.len(),
+            "output_ports and output_buffers must have the same length"
+        );
+        let batchsize = output_buffers
+            .first()
+            .map(|arr| arr.length() as usize)
+            .unwrap_or(0);
+        if batchsize == 0 {
             return Ok(());
         }
 
-        let mut parse_error: Option<GraphError> = None;
-        let mut entries: Vec<(PortKey, Float32Array)> = Vec::new();
-        let mut batchsize = 0usize;
-
-        output_ports.for_each(&mut |value, key| {
-            if parse_error.is_some() {
-                return;
-            }
-            let key_str = key.as_string().unwrap_or_default();
-            let arr: Float32Array = value.into();
-            if batchsize == 0 {
-                batchsize = arr.length() as usize;
-            }
-            match PortKey::from_str(&key_str) {
-                Ok(port_key) => entries.push((port_key, arr)),
-                Err(e) => parse_error = Some(e),
-            }
-        });
-
-        if let Some(e) = parse_error {
-            return Err(e);
-        }
-
-        if entries.is_empty() {
-            return Ok(());
-        }
-
-        let mut batch_buffer = std::mem::take(&mut self.batch_buffer);
-        let total = entries.len() * batchsize;
-        batch_buffer.resize(total, 0.0);
-
-        let mut outputs: HashMap<PortKey, &mut [f32]> = entries
+        let port_keys: Vec<PortKey> = output_ports
             .iter()
-            .zip(batch_buffer.chunks_mut(batchsize))
-            .map(|((key, _), chunk)| (*key, chunk))
-            .collect();
-        self.tick_batch(&mut outputs);
+            .map(|s| PortKey::from_str(s))
+            .collect::<Result<_, _>>()?;
 
-        for (port_key, arr) in entries.iter() {
-            arr.copy_from(outputs[port_key]);
+        let outputs = self.tick_batch(&port_keys, batchsize);
+
+        for (arr, output) in output_buffers.iter().zip(outputs) {
+            arr.copy_from(output);
         }
-
-        drop(outputs);
-        self.batch_buffer = batch_buffer;
 
         Ok(())
     }
@@ -113,12 +97,14 @@ impl Graph {
         port: usize,
         port_type: PortType,
     ) -> Option<f32> {
-        self.port_value(node_id.into(), port, port_type).copied()
+        let id = node_id.parse::<NodeId>().ok()?;
+        self.port_value(id, port, port_type).copied()
     }
 
     #[wasm_bindgen(js_name = nodeInfo)]
     pub fn _node_info(&self, node_id: String) -> Result<NodeInfo, GraphError> {
-        self.info(node_id.into())
+        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        self.info(id)
     }
 
     #[wasm_bindgen(js_name = setDefaultInputValue)]
@@ -128,7 +114,8 @@ impl Graph {
         port: usize,
         value: f32,
     ) -> Result<(), GraphError> {
-        self.set_default_input_value(node_id.into(), port, value)
+        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        self.set_default_input_value(id, port, value)
     }
 
     #[wasm_bindgen(js_name = addParam)]
@@ -138,7 +125,8 @@ impl Graph {
 
     #[wasm_bindgen(js_name = setParamValue)]
     pub fn _set_param_value(&mut self, node_id: String, value: f32) -> Result<(), GraphError> {
-        self.set_param_value(node_id.into(), value)
+        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        self.set_param_value(id, value)
     }
 }
 
@@ -150,6 +138,7 @@ pub enum DatagraphError {
     ImpossibleConnection = 3,
     NotAParameter = 4,
     InvalidPortKey = 5,
+    InvalidNodeId = 6,
 }
 
 impl From<GraphError> for JsValue {
@@ -199,6 +188,10 @@ impl From<GraphError> for JsValue {
             GraphError::InvalidPortKey { key } => {
                 arr.push(&JsValue::from(DatagraphError::InvalidPortKey));
                 arr.push(&JsValue::from_str(&key));
+            }
+            GraphError::InvalidNodeId { id } => {
+                arr.push(&JsValue::from(DatagraphError::InvalidNodeId));
+                arr.push(&JsValue::from_str(&id));
             }
         };
         arr.into()

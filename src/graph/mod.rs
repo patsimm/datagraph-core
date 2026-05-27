@@ -6,10 +6,10 @@ mod tickable;
 
 use crate::nodes::{Param, ParamHandle};
 pub use error::GraphError;
-pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo};
+pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo, NodeMeta};
 pub use node_id::NodeId;
-pub use port::{PortInfo, PortType};
-pub use tickable::{BatchTickable, PortKey, PortValueAccess, PortValueBuffer, Tickable};
+pub use port::{PortInfo, PortKey, PortType};
+pub use tickable::{BatchBuffer, BatchTickable};
 
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
@@ -21,24 +21,40 @@ struct Connection {
     to_port: usize,
 }
 
+pub trait Tickable {
+    fn tick(&mut self);
+}
+
+pub trait PortValueAccess {
+    fn port_value(&self, node_id: NodeId, port: usize, port_type: PortType) -> Option<&f32>;
+}
+
 #[wasm_bindgen]
-#[derive(Default)]
 pub struct Graph {
     nodes: HashMap<NodeId, GraphNode>,
     param_handles: HashMap<NodeId, ParamHandle>,
     connections: Vec<Connection>,
     sample_rate: u32,
-    pub(crate) batch_buffer: Vec<f32>,
+    batch_buffer: BatchBuffer,
+}
+
+impl Default for Graph {
+    fn default() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            param_handles: HashMap::new(),
+            connections: Vec::new(),
+            sample_rate: 44100,
+            batch_buffer: BatchBuffer::default(),
+        }
+    }
 }
 
 impl Graph {
     pub fn new(sample_rate: u32) -> Self {
         Self {
-            nodes: HashMap::new(),
-            param_handles: HashMap::new(),
-            connections: Vec::new(),
             sample_rate,
-            batch_buffer: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -56,14 +72,14 @@ impl Graph {
     pub fn add_param(&mut self, value: f32) -> NodeId {
         let param = Param::from(value);
         let param_handle = param.handle();
-        let graph_node = GraphNode::from(param);
+        let graph_node = GraphNode::new(param);
         let id = self.add_node(graph_node);
         self.param_handles.insert(id, param_handle);
         id
     }
 
     pub fn set_param_value(&mut self, node_id: NodeId, value: f32) -> Result<(), GraphError> {
-        assert_node_exists(self, node_id)?;
+        self.node_exists(node_id)?;
         if let Some(handle) = self.param_handles.get_mut(&node_id) {
             handle.set(value);
             Ok(())
@@ -73,7 +89,7 @@ impl Graph {
     }
 
     pub fn remove_node(&mut self, node: NodeId) -> Result<(), GraphError> {
-        assert_node_exists(self, node)?;
+        self.node_exists(node)?;
         self.nodes.remove(&node);
         self.connections
             .retain(|conn| conn.from != node && conn.to != node);
@@ -94,7 +110,7 @@ impl Graph {
         to: NodeId,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        assert_port_exists(self, from, from_port, PortType::Output)?;
+        self.port_exists(from, from_port, PortType::Output)?;
         if from == to {
             return Err(GraphError::ImpossibleConnection {
                 from_node_id: from,
@@ -103,7 +119,7 @@ impl Graph {
                 to_port,
             });
         }
-        assert_port_is_free(self, to, to_port, PortType::Input)?;
+        self.port_is_free(to, to_port)?;
 
         self.connections.push(Connection {
             from,
@@ -122,8 +138,8 @@ impl Graph {
         to: NodeId,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        assert_port_exists(self, from, from_port, PortType::Output)?;
-        assert_port_exists(self, to, to_port, PortType::Input)?;
+        self.port_exists(from, from_port, PortType::Output)?;
+        self.port_exists(to, to_port, PortType::Input)?;
 
         self.connections.retain(|conn| {
             !(conn.from == from
@@ -146,19 +162,59 @@ impl Graph {
         port: usize,
         value: f32,
     ) -> Result<(), GraphError> {
-        assert_port_exists(self, node_id, port, PortType::Input)?;
-        if let Some(node) = self.nodes.get_mut(&node_id) {
-            node.set_default_input_value(port, value);
-            Ok(())
-        } else {
-            Err(GraphError::NodeNotFound { node_id })
+        self.port_exists(node_id, port, PortType::Input)?;
+        self.nodes
+            .get_mut(&node_id)
+            .expect("node exists — checked by port_exists")
+            .set_default_input_value(port, value);
+        Ok(())
+    }
+
+    fn node_exists(&self, node_id: NodeId) -> Result<(), GraphError> {
+        self.nodes
+            .get(&node_id)
+            .ok_or(GraphError::NodeNotFound { node_id })?;
+        Ok(())
+    }
+
+    fn port_exists(
+        &self,
+        node_id: NodeId,
+        port: usize,
+        port_type: PortType,
+    ) -> Result<(), GraphError> {
+        let node = self
+            .nodes
+            .get(&node_id)
+            .ok_or(GraphError::NodeNotFound { node_id })?;
+        node.port_info(port_type, port).map_or(
+            Err(GraphError::PortNotFound {
+                node_id,
+                port,
+                port_type,
+            }),
+            |_| Ok(()),
+        )
+    }
+
+    fn port_is_free(&self, node_id: NodeId, port: usize) -> Result<(), GraphError> {
+        self.port_exists(node_id, port, PortType::Input)?;
+        for conn in &self.connections {
+            if conn.to == node_id && conn.to_port == port {
+                return Err(GraphError::PortAlreadyConnected {
+                    node_id,
+                    port,
+                    port_type: PortType::Input,
+                });
+            }
         }
+        Ok(())
     }
 }
 
 impl Tickable for Graph {
     fn tick(&mut self) {
-        for (_, node) in &mut self.nodes.iter_mut() {
+        for node in self.nodes.values_mut() {
             node.reset_input_cache();
         }
         for conn in &self.connections {
@@ -168,9 +224,27 @@ impl Tickable for Graph {
                 .unwrap()
                 .set_input_value(conn.to_port, value);
         }
-        for (_, node) in &mut self.nodes.iter_mut() {
+        for node in self.nodes.values_mut() {
             node.tick();
         }
+    }
+}
+
+impl BatchTickable for Graph {
+    fn tick_batch<'a>(
+        &'a mut self,
+        output_ports: &[PortKey],
+        batchsize: usize,
+    ) -> std::slice::Chunks<'a, f32> {
+        self.batch_buffer.resize(output_ports, batchsize);
+        for sample_index in 0..batchsize {
+            self.tick();
+            for (port_index, port) in output_ports.iter().enumerate() {
+                let val = *self.nodes[&port.node_id].output_value(port.port_index);
+                self.batch_buffer.set_value(port_index, sample_index, val);
+            }
+        }
+        (&self.batch_buffer).into_iter()
     }
 }
 
@@ -182,61 +256,6 @@ impl PortValueAccess for Graph {
     }
 }
 
-fn assert_node_exists(graph: &Graph, node_id: NodeId) -> Result<(), GraphError> {
-    graph
-        .nodes
-        .get(&node_id)
-        .ok_or(GraphError::NodeNotFound { node_id })?;
-    Ok(())
-}
-
-fn assert_port_exists(
-    graph: &Graph,
-    node_id: NodeId,
-    port: usize,
-    port_type: PortType,
-) -> Result<(), GraphError> {
-    let node = graph
-        .nodes
-        .get(&node_id)
-        .ok_or(GraphError::NodeNotFound { node_id })?;
-
-    node.port_info(port_type, port).map_or(
-        Err(GraphError::PortNotFound {
-            node_id,
-            port,
-            port_type,
-        }),
-        |_| Ok(()),
-    )
-}
-
-fn assert_port_is_free(
-    graph: &Graph,
-    node_id: NodeId,
-    port: usize,
-    port_type: PortType,
-) -> Result<(), GraphError> {
-    assert_port_exists(graph, node_id, port, port_type)?;
-
-    for conn in &graph.connections {
-        if conn.to == node_id && conn.to_port == port && port_type == PortType::Input {
-            return Err(GraphError::PortAlreadyConnected {
-                node_id,
-                port,
-                port_type,
-            });
-        }
-        if conn.from == node_id && conn.from_port == port && port_type == PortType::Output {
-            return Err(GraphError::PortAlreadyConnected {
-                node_id,
-                port,
-                port_type,
-            });
-        }
-    }
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {

@@ -30,6 +30,9 @@ pub enum GraphError {
     InvalidPortKey {
         key: String,
     },
+    InvalidNodeId {
+        id: String,
+    },
 }
 
 impl Display for GraphError {
@@ -80,6 +83,7 @@ impl Display for GraphError {
                 from_port, from_node_id, to_port, to_node_id
             )?,
             GraphError::InvalidPortKey { key } => write!(f, "Invalid port key: {}", key)?,
+            GraphError::InvalidNodeId { id } => write!(f, "Invalid node id: {}", id)?,
         };
         Ok(())
     }
