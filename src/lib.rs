@@ -8,16 +8,9 @@ use crate::graph::{
     PortValueAccess,
 };
 
-pub mod event_buffer;
-pub mod frequency;
+pub mod dsp;
 pub mod graph;
-pub mod helpers;
 pub mod nodes;
-pub mod note;
-pub mod ramp;
-pub mod ring_buffer;
-pub mod state_machine;
-pub mod wav;
 
 #[wasm_bindgen]
 impl Graph {

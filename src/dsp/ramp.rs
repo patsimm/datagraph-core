@@ -1,4 +1,4 @@
-use crate::helpers::lerp;
+use super::helpers::lerp;
 
 #[derive(Clone, Copy)]
 pub struct Ramp {

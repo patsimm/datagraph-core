@@ -1,7 +1,7 @@
 use std::f32::consts::{PI, TAU};
 
 use crate::{
-    frequency::{Frequency, FromCv},
+    dsp::{Frequency, FromCv},
     graph::Node,
 };
 
@@ -106,9 +106,8 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        frequency::{FromHz, ToCv},
+        dsp::{FromHz, ToCv, ToSamples},
         graph::Node,
-        helpers::ToSamples,
     };
 
     use super::*;

@@ -1,21 +1,16 @@
-mod add;
 mod adsr;
 mod delay;
 mod filter;
-mod max;
-mod min;
-mod multiply;
+mod math;
 mod noise;
 mod oscillator;
-mod param;
-mod passthrough;
 mod sequencer;
 
 use crate::graph::{CreateNode, GraphNode, Node};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-pub use param::{Param, ParamHandle};
+pub use crate::graph::{Param, ParamHandle};
 
 static INSTANCE: OnceLock<NodeRegistry> = OnceLock::new();
 
@@ -67,17 +62,17 @@ macro_rules! register_nodes {
 }
 
 register_nodes!(
-    add::Add,
+    math::Add,
     adsr::ADSR,
     delay::Delay,
     filter::OnePoleLowPass,
-    multiply::Multiply,
-    passthrough::Passthrough,
+    math::Multiply,
+    math::Passthrough,
     sequencer::Sequencer,
     oscillator::Sin,
     oscillator::Saw,
     oscillator::Square,
     noise::Noise,
-    min::Min,
-    max::Max
+    math::Min,
+    math::Max
 );

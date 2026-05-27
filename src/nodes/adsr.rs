@@ -1,10 +1,8 @@
 use std::time::Duration;
 
 use crate::{
+    dsp::{Ramp, State, StateMachine, ToSamples},
     graph::Node,
-    helpers::ToSamples,
-    ramp::Ramp,
-    state_machine::{State, StateMachine},
 };
 
 struct ADSRContext {

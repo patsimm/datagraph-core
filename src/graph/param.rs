@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
-use crate::{graph::Node, helpers::AtomicF32};
+use super::Node;
+use crate::dsp::AtomicF32;
 
 pub struct ParamHandle {
     value: Arc<AtomicF32>,

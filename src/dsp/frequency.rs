@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::note::MidiNote;
+use super::note::MidiNote;
 
 pub struct Frequency(f32);
 
@@ -89,10 +89,8 @@ impl Frequency {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        frequency::{Frequency, FromBpm, ToCv},
-        note::Note,
-    };
+    use super::{Frequency, FromBpm, ToCv};
+    use crate::dsp::Note;
 
     #[test]
     fn bpm120_is_0_32cv() {

@@ -1,4 +1,4 @@
-use crate::{graph::Node, ring_buffer::RingBuffer};
+use crate::{dsp::RingBuffer, graph::Node};
 
 const MAX_SECONDS: usize = 5;
 

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{graph::Node, helpers::ToSamples};
+use crate::{dsp::ToSamples, graph::Node};
 
 pub struct OnePoleLowPass {
     sample_rate: u32,

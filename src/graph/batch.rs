@@ -25,11 +25,3 @@ impl BatchBuffer {
         self.buffer[port_index * self.batchsize + sample_index] = value;
     }
 }
-
-pub trait BatchTickable {
-    fn tick_batch<'a>(
-        &'a mut self,
-        outputs: &[PortKey],
-        batchsize: usize,
-    ) -> std::slice::Chunks<'a, f32>;
-}

@@ -92,7 +92,7 @@ impl From<Note> for MidiNote {
 
 #[cfg(test)]
 mod tests {
-    use crate::frequency::Frequency;
+    use crate::dsp::Frequency;
 
     use super::*;
 
