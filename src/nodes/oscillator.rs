@@ -8,14 +8,21 @@ use crate::{
 pub struct OscillatorCore {
     sample_rate: u32,
     phi: f32,
+    frequency_calc: fn(f32) -> Frequency,
 }
 
 impl OscillatorCore {
-    fn new(sample_rate: u32) -> Self {
+    pub fn new(sample_rate: u32) -> Self {
         Self {
             sample_rate,
             phi: 0.0,
+            frequency_calc: Frequency::from_cv,
         }
+    }
+
+    pub fn with_frequency_calc(mut self, calc: fn(f32) -> Frequency) -> Self {
+        self.frequency_calc = calc;
+        self
     }
 
     pub fn advance_phase(&mut self, frequency: &Frequency) -> f32 {
@@ -26,16 +33,17 @@ impl OscillatorCore {
 }
 
 pub trait Oscillator: Node<1, 1> {
+    const OSCILLATOR_INPUT_NAME: &'static str = "frequency 1/oct";
     fn core_mut(&mut self) -> &mut OscillatorCore;
     fn oscillate(&mut self, phi: f32) -> f32;
     fn create(sample_rate: u32) -> Self;
 }
 
 impl<T: Oscillator> Node<1, 1> for T {
-    const INPUT_NAMES: [&'static str; 1] = ["frequency"];
+    const INPUT_NAMES: [&'static str; 1] = [T::OSCILLATOR_INPUT_NAME];
     const OUTPUT_NAMES: [&'static str; 1] = ["output"];
     fn process(&mut self, input: [f32; 1], output: &mut [f32; 1]) {
-        let frequency = Frequency::from_cv(input[0]);
+        let frequency = (self.core_mut().frequency_calc)(input[0]);
         let phi = self.core_mut().advance_phase(&frequency);
         output[0] = self.oscillate(phi);
     }
@@ -126,7 +134,11 @@ mod tests {
         let mut out = [0.0];
         for _ in 0..SR {
             osc.process([0.0], &mut out);
-            assert!((-1.0..=1.0).contains(&out[0]), "output out of range: {}", out[0]);
+            assert!(
+                (-1.0..=1.0).contains(&out[0]),
+                "output out of range: {}",
+                out[0]
+            );
         }
     }
 
@@ -178,7 +190,10 @@ mod tests {
         let mut osc = Sin::new(SR);
         let mut out = [0.0];
         let outputs: Vec<f32> = (0..cycle_len * 2)
-            .map(|_| { osc.process([cv], &mut out); out[0] })
+            .map(|_| {
+                osc.process([cv], &mut out);
+                out[0]
+            })
             .collect();
 
         for i in 0..cycle_len {

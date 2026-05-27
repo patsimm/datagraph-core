@@ -107,12 +107,13 @@ impl ADSR {
         release_s: f32,
     ) -> f32 {
         self.state_machine
-            .tick(ADSRContext {
+            .next(ADSRContext {
                 gate_on: gate,
                 attack_dur: Duration::from_secs_f32(attack_s.max(0.0)).to_samples(self.sample_rate),
                 decay_dur: Duration::from_secs_f32(decay_s.max(0.0)).to_samples(self.sample_rate),
                 sustain,
-                release_dur: Duration::from_secs_f32(release_s.max(0.0)).to_samples(self.sample_rate),
+                release_dur: Duration::from_secs_f32(release_s.max(0.0))
+                    .to_samples(self.sample_rate),
             })
             .value()
     }

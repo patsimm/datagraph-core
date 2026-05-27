@@ -1,5 +1,7 @@
 mod adsr;
+mod clock;
 mod delay;
+mod monoshot;
 mod filter;
 mod math;
 mod noise;
@@ -74,5 +76,8 @@ register_nodes!(
     oscillator::Square,
     noise::Noise,
     math::Min,
-    math::Max
+    math::Max,
+    clock::Clock,
+    clock::ClockDivider,
+    monoshot::Monoshot
 );
