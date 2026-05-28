@@ -1,3 +1,4 @@
+use log::info;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
@@ -212,9 +213,7 @@ impl Tickable for Graph {
                 .unwrap()
                 .set_input_value(conn.to_port, value);
         }
-        for node in self.nodes.values_mut() {
-            node.tick();
-        }
+        self.nodes.iter_mut().for_each(|(_, node)| node.tick());
     }
 }
 

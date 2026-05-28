@@ -1,11 +1,16 @@
 use std::str::FromStr;
 
 use js_sys::Float32Array;
+use log::info;
 use wasm_bindgen::prelude::*;
+use web_sys::AudioContext;
 
-use crate::graph::{
-    BatchTickable, Graph, GraphError, GraphNode, NodeId, NodeInfo, PortKey, PortType,
-    PortValueAccess,
+use crate::{
+    graph::{
+        BatchTickable, Graph, GraphError, GraphNode, NodeId, NodeInfo, PortKey, PortType,
+        PortValueAccess,
+    },
+    nodes::Sin,
 };
 
 pub mod dsp;
@@ -21,7 +26,9 @@ impl Graph {
 
     #[wasm_bindgen(js_name = remove)]
     pub fn _remove(&mut self, node_id: String) -> Result<(), GraphError> {
-        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        let id = node_id
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
         self.remove_node(id)
     }
 
@@ -33,8 +40,12 @@ impl Graph {
         to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        let from_id = from.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: from })?;
-        let to_id = to.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: to })?;
+        let from_id = from
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: from })?;
+        let to_id = to
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: to })?;
         self.connect(from_id, from_port, to_id, to_port)
     }
 
@@ -46,8 +57,12 @@ impl Graph {
         to: String,
         to_port: usize,
     ) -> Result<(), GraphError> {
-        let from_id = from.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: from })?;
-        let to_id = to.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: to })?;
+        let from_id = from
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: from })?;
+        let to_id = to
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: to })?;
         self.disconnect(from_id, from_port, to_id, to_port)
     }
 
@@ -96,7 +111,9 @@ impl Graph {
 
     #[wasm_bindgen(js_name = nodeInfo)]
     pub fn _node_info(&self, node_id: String) -> Result<NodeInfo, GraphError> {
-        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        let id = node_id
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
         self.info(id)
     }
 
@@ -107,7 +124,9 @@ impl Graph {
         port: usize,
         value: f32,
     ) -> Result<(), GraphError> {
-        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        let id = node_id
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
         self.set_default_input_value(id, port, value)
     }
 
@@ -118,7 +137,9 @@ impl Graph {
 
     #[wasm_bindgen(js_name = setParamValue)]
     pub fn _set_param_value(&mut self, node_id: String, value: f32) -> Result<(), GraphError> {
-        let id = node_id.parse::<NodeId>().map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
+        let id = node_id
+            .parse::<NodeId>()
+            .map_err(|_| GraphError::InvalidNodeId { id: node_id })?;
         self.set_param_value(id, value)
     }
 }
@@ -192,8 +213,11 @@ impl From<GraphError> for JsValue {
 }
 
 #[wasm_bindgen(js_name = createGraph)]
-pub fn create_graph(sample_rate: u32) -> Graph {
-    Graph::new(sample_rate)
+pub fn create_graph(sample_rate: u32) -> Result<Graph, JsValue> {
+    console_error_panic_hook::set_once();
+    console_log::init().map_err(|err| err.to_string())?;
+
+    Ok(Graph::new(sample_rate))
 }
 
 #[wasm_bindgen(js_name = nodeTypes)]

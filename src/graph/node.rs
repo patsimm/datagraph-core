@@ -52,14 +52,14 @@ pub struct NodeMeta {
     pub node_type: &'static str,
 }
 
-pub trait DynNode: Send {
+pub trait DynNode: Send + Sync {
     fn process_sample(&mut self, inputs: &[f32], outputs: &mut [f32]);
     fn meta(&self) -> NodeMeta;
 }
 
 struct DynNodeWrapper<const IN: usize, const OUT: usize, T: Node<IN, OUT>>(pub T);
 
-impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send> DynNode
+impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send + Sync> DynNode
     for DynNodeWrapper<IN, OUT, T>
 {
     fn process_sample(&mut self, input: &[f32], output: &mut [f32]) {
@@ -90,7 +90,7 @@ pub struct GraphNode {
 impl GraphNode {
     pub fn new<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
     where
-        T: Node<IN, OUT> + Send + 'static,
+        T: Node<IN, OUT> + Sync + Send + 'static,
     {
         let mut node: Box<dyn DynNode> = Box::new(DynNodeWrapper::<IN, OUT, T>(node));
         let default_inputs = Box::new([0.0; IN]);

@@ -24,6 +24,16 @@ pub struct PortKey {
     pub port_type: PortType,
 }
 
+impl PortKey {
+    pub fn new(node_id: NodeId, port_index: usize, port_type: PortType) -> Self {
+        Self {
+            node_id,
+            port_index,
+            port_type,
+        }
+    }
+}
+
 // export function parsePortKey(key: string): PortInfo {
 //   const [node, port] = key.split("[");
 //   const [portType, portIndex] = port.split("]")[0].split(":");
@@ -54,7 +64,9 @@ impl FromStr for PortKey {
             .ok_or_else(|| GraphError::InvalidPortKey { key: s.into() })?
             .trim();
         Ok(PortKey {
-            node_id: node_id.parse().map_err(|_| GraphError::InvalidPortKey { key: s.into() })?,
+            node_id: node_id
+                .parse()
+                .map_err(|_| GraphError::InvalidPortKey { key: s.into() })?,
             port_index: port_index_str
                 .parse()
                 .map_err(|_| GraphError::InvalidPortKey { key: s.into() })?,
