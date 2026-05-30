@@ -4,7 +4,7 @@ use std::{fmt::Display, ops::Deref, str::FromStr};
 use tsify_next::Tsify;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Tsify)]
-#[tsify(into_wasm_abi)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct NodeId(#[tsify(type = "string")] [char; 8]);
 
 impl Serialize for NodeId {

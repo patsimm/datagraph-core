@@ -1,35 +1,82 @@
-use std::panic::AssertUnwindSafe;
+use std::{cell::RefCell, rc::Rc};
 
-use tsify_next::declare;
-use wasm_bindgen::JsValue;
-use wasm_bindgen::prelude::*;
-use web_sys::{AudioContext, AudioWorkletNode, AudioWorkletNodeOptions};
+use wasm_bindgen::{JsCast, closure::Closure, prelude::*};
+use web_sys::{AudioContext, AudioWorkletNode, AudioWorkletNodeOptions, MessageEvent};
 
-use crate::event_queue::SharedPort;
+use crate::{
+    command_queue::{apply_command, GraphCommand},
+    event_queue::SharedPort,
+    graph::{BatchTickable, Graph, PortInfo},
+    latest_value::LatestValueWriter,
+    node_data::NodeDataWriter,
+    nodes::NodeRegistry,
+};
 
-#[declare]
-type ProcessFn = dyn FnMut(&mut [f32]) -> bool;
+pub(crate) struct GraphState {
+    pub graph: Graph,
+    pub lv_writer: LatestValueWriter,
+    pub nd_writer: NodeDataWriter,
+    pub node_reg: NodeRegistry,
+    pub sample_rate: u32,
+    pub output_port: PortInfo,
+}
 
 #[wasm_bindgen]
 pub struct WasmAudioProcessor {
-    process_fn: Box<ProcessFn>,
+    state: Rc<RefCell<GraphState>>,
     port: SharedPort,
+    _onmessage: Option<Closure<dyn FnMut(MessageEvent)>>,
 }
 
 impl WasmAudioProcessor {
-    pub fn new(process_fn: Box<ProcessFn>, port: SharedPort) -> Self {
-        Self { process_fn, port }
+    pub(crate) fn new(state: Rc<RefCell<GraphState>>, port: SharedPort) -> Self {
+        Self {
+            state,
+            port,
+            _onmessage: None,
+        }
     }
 }
 
 #[wasm_bindgen]
 impl WasmAudioProcessor {
     pub fn process(&mut self, buf: &mut [f32]) -> bool {
-        (self.process_fn)(buf)
+        let mut guard = self.state.borrow_mut();
+        let s = &mut *guard;
+
+        let nd_ports = s.nd_writer.subscribed_ports();
+        let mut output_ports = vec![s.output_port.key()];
+        output_ports.extend(nd_ports.iter());
+
+        let mut out = s.graph.tick_batch(&output_ports, buf.len());
+        let first = out.next().unwrap_or(&[]);
+        let len = first.len().min(buf.len());
+        buf[..len].copy_from_slice(&first[..len]);
+
+        s.nd_writer.write_batches(out);
+        s.lv_writer.write_from_graph(&s.graph);
+        true
     }
 
     #[wasm_bindgen(js_name = setPort)]
     pub fn set_port(&mut self, port: web_sys::MessagePort) {
+        let state = Rc::clone(&self.state);
+        let closure = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            if let Ok(cmd) = serde_wasm_bindgen::from_value::<GraphCommand>(e.data()) {
+                let mut guard = state.borrow_mut();
+                let s = &mut *guard;
+                apply_command(
+                    cmd,
+                    &mut s.graph,
+                    &mut s.lv_writer,
+                    &mut s.nd_writer,
+                    &s.node_reg,
+                    s.sample_rate,
+                );
+            }
+        });
+        port.set_onmessage(Some(closure.as_ref().unchecked_ref()));
+        self._onmessage = Some(closure);
         *self.port.borrow_mut() = Some(port);
     }
 
@@ -44,11 +91,12 @@ impl WasmAudioProcessor {
 
 pub fn wasm_audio(
     ctx: AudioContext,
-    process_fn: Box<ProcessFn>,
+    state: GraphState,
     port: SharedPort,
 ) -> Result<AudioWorkletNode, JsValue> {
-    let processor = AssertUnwindSafe(WasmAudioProcessor::new(process_fn, port));
-    let node = wasm_audio_node(&ctx, processor.0)?;
+    let state = Rc::new(RefCell::new(state));
+    let processor = WasmAudioProcessor::new(state, port);
+    let node = wasm_audio_node(&ctx, processor)?;
     node.connect_with_audio_node(&ctx.destination())?;
     Ok(node)
 }
