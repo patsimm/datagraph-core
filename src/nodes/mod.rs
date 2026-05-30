@@ -1,30 +1,23 @@
 mod adsr;
 mod clock;
 mod delay;
-mod monoshot;
 mod filter;
 mod math;
+mod monoshot;
 mod noise;
 mod oscillator;
 mod sequencer;
 
-use crate::graph::{CreateNode, GraphNode, Node};
+use crate::graph::{CreateNode, GraphNode, Node, NodeId};
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 pub use crate::graph::{Param, ParamHandle};
 
-static INSTANCE: OnceLock<NodeRegistry> = OnceLock::new();
-
 pub struct NodeRegistry {
-    registry: HashMap<&'static str, fn(u32) -> GraphNode>,
+    registry: HashMap<&'static str, fn(NodeId, u32) -> GraphNode>,
 }
 
 impl NodeRegistry {
-    pub fn global() -> &'static Self {
-        INSTANCE.get_or_init(Self::initialize)
-    }
-
     pub fn register<T: CreateNode>(&mut self) {
         self.registry.insert(std::any::type_name::<T>(), T::create);
     }
@@ -33,10 +26,10 @@ impl NodeRegistry {
         self.registry.keys().copied()
     }
 
-    pub fn create(&self, typename: &str, sample_rate: u32) -> Option<GraphNode> {
+    pub fn create(&self, node_id: NodeId, typename: &str, sample_rate: u32) -> Option<GraphNode> {
         self.registry
             .get(typename)
-            .map(|factory| factory(sample_rate))
+            .map(|factory| factory(node_id, sample_rate))
     }
 }
 
@@ -45,8 +38,8 @@ macro_rules! register_nodes {
         $(
             pub use $t;
             impl CreateNode for $t {
-                fn create(sample_rate: u32) -> GraphNode {
-                    GraphNode::new(Self::new(sample_rate))
+                fn create(node_id: NodeId, sample_rate: u32) -> GraphNode {
+                    GraphNode::new(node_id, Self::new(sample_rate))
                 }
             }
         )+

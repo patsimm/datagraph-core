@@ -1,27 +1,77 @@
 use std::{fmt::Display, str::FromStr};
 
+use serde::{Deserialize, Serialize};
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::graph::{GraphError, NodeId};
 
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum PortType {
+    #[serde(rename = "in")]
     Input,
+    #[serde(rename = "out")]
     Output,
 }
 
+#[derive(Clone, Debug, Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct PortInfo {
-    pub port_index: usize,
-    pub port_type: PortType,
-    pub name: &'static str,
+    #[tsify(type = "string")]
+    portkey: PortKey,
+    name: &'static str,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+impl PortInfo {
+    pub fn new(
+        node_id: NodeId,
+        port_index: usize,
+        port_type: PortType,
+        name: &'static str,
+    ) -> Self {
+        Self {
+            portkey: PortKey::new(node_id, port_index, port_type),
+            name,
+        }
+    }
+
+    pub fn node_id(&self) -> &NodeId {
+        &self.portkey.node_id
+    }
+
+    pub fn port_index(&self) -> usize {
+        self.portkey.port_index
+    }
+
+    pub fn port_type(&self) -> PortType {
+        self.portkey.port_type
+    }
+
+    pub fn key(&self) -> &PortKey {
+        &self.portkey
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PortKey {
-    pub node_id: NodeId,
-    pub port_index: usize,
-    pub port_type: PortType,
+    node_id: NodeId,
+    port_index: usize,
+    port_type: PortType,
+}
+
+impl serde::Serialize for PortKey {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PortKey {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        PortKey::from_str(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 impl PortKey {
@@ -31,6 +81,18 @@ impl PortKey {
             port_index,
             port_type,
         }
+    }
+
+    pub fn node_id(&self) -> &NodeId {
+        &self.node_id
+    }
+
+    pub fn port_index(&self) -> usize {
+        self.port_index
+    }
+
+    pub fn port_type(&self) -> PortType {
+        self.port_type
     }
 }
 

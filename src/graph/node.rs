@@ -1,19 +1,62 @@
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+use crate::graph::NodeId;
 
 use super::port::{PortInfo, PortType};
 
 #[wasm_bindgen]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NodeInfo {
+    node_id: NodeId,
     input_names: Vec<&'static str>,
     output_names: Vec<&'static str>,
     node_type: &'static str,
     default_input_values: Vec<f32>,
 }
 
+impl NodeInfo {
+    pub fn new(node_id: NodeId, node_meta: NodeMeta, default_input_values: Vec<f32>) -> Self {
+        Self {
+            node_id,
+            input_names: node_meta.input_names.to_vec(),
+            output_names: node_meta.output_names.to_vec(),
+            node_type: node_meta.node_type,
+            default_input_values,
+        }
+    }
+
+    pub fn node_id(&self) -> &NodeId {
+        &self.node_id
+    }
+
+    pub fn input_names(&self) -> &[&'static str] {
+        &self.input_names
+    }
+
+    pub fn output_names(&self) -> &[&'static str] {
+        &self.output_names
+    }
+
+    pub fn node_type(&self) -> &'static str {
+        self.node_type
+    }
+
+    pub fn default_input_values(&self) -> &[f32] {
+        &self.default_input_values
+    }
+}
+
 #[wasm_bindgen]
 impl NodeInfo {
+    #[wasm_bindgen(getter, js_name = nodeId)]
+    pub fn _node_id(&self) -> String {
+        self.node_id.to_string()
+    }
+
     #[wasm_bindgen(getter, js_name = inputNames)]
-    pub fn input_names(&self) -> Vec<JsValue> {
+    pub fn _input_names(&self) -> Vec<JsValue> {
         self.input_names
             .iter()
             .map(|s| JsValue::from_str(s))
@@ -21,7 +64,7 @@ impl NodeInfo {
     }
 
     #[wasm_bindgen(getter, js_name = outputNames)]
-    pub fn output_names(&self) -> Vec<JsValue> {
+    pub fn _output_names(&self) -> Vec<JsValue> {
         self.output_names
             .iter()
             .map(|s| JsValue::from_str(s))
@@ -29,12 +72,12 @@ impl NodeInfo {
     }
 
     #[wasm_bindgen(getter, js_name = nodeType)]
-    pub fn node_type(&self) -> String {
+    pub fn _node_type(&self) -> String {
         self.node_type.to_string()
     }
 
     #[wasm_bindgen(getter, js_name = defaultInputValues)]
-    pub fn default_input_values(&self) -> Vec<f32> {
+    pub fn _default_input_values(&self) -> Vec<f32> {
         self.default_input_values.clone()
     }
 }
@@ -46,6 +89,7 @@ pub trait Node<const IN: usize, const OUT: usize> {
     fn new(sample_rate: u32) -> Self;
 }
 
+#[derive(Debug, Clone)]
 pub struct NodeMeta {
     pub input_names: &'static [&'static str],
     pub output_names: &'static [&'static str],
@@ -81,6 +125,7 @@ impl<const IN: usize, const OUT: usize, T: Node<IN, OUT> + Send + Sync> DynNode
 
 #[wasm_bindgen]
 pub struct GraphNode {
+    id: NodeId,
     node: Box<dyn DynNode>,
     input_cache: Box<[f32]>,
     output_cache: Box<[f32]>,
@@ -88,7 +133,7 @@ pub struct GraphNode {
 }
 
 impl GraphNode {
-    pub fn new<const IN: usize, const OUT: usize, T>(node: T) -> GraphNode
+    pub fn new<const IN: usize, const OUT: usize, T>(id: NodeId, node: T) -> GraphNode
     where
         T: Node<IN, OUT> + Sync + Send + 'static,
     {
@@ -99,11 +144,16 @@ impl GraphNode {
         node.process_sample(&*input_cache, output_cache.as_mut());
 
         GraphNode {
+            id,
             node,
             output_cache,
             input_cache,
             default_inputs,
         }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.id
     }
 
     pub fn default_inputs(&self) -> &[f32] {
@@ -124,14 +174,8 @@ impl GraphNode {
         }
     }
 
-    pub fn node_info(&self) -> NodeInfo {
-        let meta = self.node.meta();
-        NodeInfo {
-            input_names: meta.input_names.to_vec(),
-            output_names: meta.output_names.to_vec(),
-            node_type: meta.node_type,
-            default_input_values: (*self.default_inputs).to_vec(),
-        }
+    pub fn node_meta(&self) -> NodeMeta {
+        self.node.meta()
     }
 
     pub fn tick(&mut self) {
@@ -172,11 +216,9 @@ impl GraphNode {
             PortType::Input => meta.input_names,
             PortType::Output => meta.output_names,
         };
-        names.get(port).map(|&name| PortInfo {
-            port_index: port,
-            port_type,
-            name,
-        })
+        names
+            .get(port)
+            .map(|&name| PortInfo::new(self.id, port, port_type, name))
     }
 
     pub fn set_default_input_value(&mut self, port: usize, value: f32) {
@@ -187,5 +229,5 @@ impl GraphNode {
 }
 
 pub trait CreateNode: Send + 'static {
-    fn create(sample_rate: u32) -> GraphNode;
+    fn create(node_id: NodeId, sample_rate: u32) -> GraphNode;
 }

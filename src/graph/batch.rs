@@ -16,7 +16,7 @@ impl<'a> IntoIterator for &'a BatchBuffer {
 }
 
 impl BatchBuffer {
-    pub(super) fn resize(&mut self, ports: &[PortKey], batchsize: usize) {
+    pub(super) fn resize(&mut self, ports: &[&PortKey], batchsize: usize) {
         self.batchsize = batchsize;
         self.buffer.resize(ports.len() * batchsize, 0.0);
     }

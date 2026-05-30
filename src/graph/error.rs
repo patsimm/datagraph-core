@@ -1,9 +1,14 @@
 use std::fmt::Display;
 
+use serde::Serialize;
+use tsify_next::Tsify;
+
 use super::node_id::NodeId;
 use super::port::PortType;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum GraphError {
     NodeNotFound {
         node_id: NodeId,

@@ -94,13 +94,14 @@ mod tests {
 
     #[test]
     fn param_change_is_smoothed_through_graph() {
+        use crate::graph::{PortKey, PortType};
         let mut graph = Graph::new(1);
-        let param_id = graph.add_param(0.0);
+        let param_id = *graph.add_param(0.0).node_id();
         // sample_rate=1 Hz, smoothing_secs=1.0 → n_samples=1 → alpha = 1 - 1/e ≈ 0.632
-        let filter_id = graph.add::<OnePoleLowPass>();
-        let smoothing_id = graph.add_param(1.0);
-        graph.connect(param_id, 0, filter_id, 0).unwrap();
-        graph.connect(smoothing_id, 0, filter_id, 1).unwrap();
+        let filter_id = *graph.add::<OnePoleLowPass>().node_id();
+        let smoothing_id = *graph.add_param(1.0).node_id();
+        graph.connect(&param_id, 0, &filter_id, 0).unwrap();
+        graph.connect(&smoothing_id, 0, &filter_id, 1).unwrap();
 
         // Settle at 0.0
         for _ in 0..10 {
@@ -108,7 +109,7 @@ mod tests {
         }
         assert_eq!(
             *graph
-                .port_value(filter_id, 0, crate::graph::PortType::Output)
+                .port_value(&PortKey::new(filter_id, 0, PortType::Output))
                 .unwrap(),
             0.0
         );
@@ -116,11 +117,11 @@ mod tests {
         // Step param to 1.0 — filter should NOT jump instantly
         // With double-buffered graph, the param cache updates on tick 10,
         // and the filter sees the new value on tick 11.
-        graph.set_param_value(param_id, 1.0).unwrap();
+        graph.set_param_value(&param_id, 1.0).unwrap();
         graph.tick();
         graph.tick();
         let first = *graph
-            .port_value(filter_id, 0, crate::graph::PortType::Output)
+            .port_value(&PortKey::new(filter_id, 0, PortType::Output))
             .unwrap();
         // alpha = 1 - 1/e ≈ 0.6321: expected output = alpha * 1.0 + (1-alpha) * 0.0
         let expected_alpha = 1.0 - (-1.0_f32).exp();
@@ -140,7 +141,7 @@ mod tests {
             graph.tick();
         }
         let final_out = *graph
-            .port_value(filter_id, 0, crate::graph::PortType::Output)
+            .port_value(&PortKey::new(filter_id, 0, PortType::Output))
             .unwrap();
         assert!(
             (final_out - 1.0).abs() < 0.001,
