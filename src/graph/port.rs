@@ -1,10 +1,13 @@
 use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
-use tsify_next::Tsify;
+use tsify_next::{Tsify, declare};
 use wasm_bindgen::prelude::*;
 
 use crate::graph::{GraphError, NodeId};
+
+#[declare]
+pub type PortIndex = u8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -27,7 +30,7 @@ pub struct PortInfo {
 impl PortInfo {
     pub fn new(
         node_id: NodeId,
-        port_index: usize,
+        port_index: PortIndex,
         port_type: PortType,
         name: &'static str,
     ) -> Self {
@@ -41,7 +44,7 @@ impl PortInfo {
         &self.portkey.node_id
     }
 
-    pub fn port_index(&self) -> usize {
+    pub fn port_index(&self) -> PortIndex {
         self.portkey.port_index
     }
 
@@ -57,7 +60,7 @@ impl PortInfo {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PortKey {
     node_id: NodeId,
-    port_index: usize,
+    port_index: PortIndex,
     port_type: PortType,
 }
 
@@ -75,7 +78,7 @@ impl<'de> serde::Deserialize<'de> for PortKey {
 }
 
 impl PortKey {
-    pub fn new(node_id: NodeId, port_index: usize, port_type: PortType) -> Self {
+    pub fn new(node_id: NodeId, port_index: PortIndex, port_type: PortType) -> Self {
         Self {
             node_id,
             port_index,
@@ -87,7 +90,7 @@ impl PortKey {
         &self.node_id
     }
 
-    pub fn port_index(&self) -> usize {
+    pub fn port_index(&self) -> PortIndex {
         self.port_index
     }
 

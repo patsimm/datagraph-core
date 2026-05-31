@@ -4,7 +4,7 @@ use serde::Serialize;
 use tsify_next::Tsify;
 
 use super::node_id::NodeId;
-use super::port::PortType;
+use super::port::{PortIndex, PortType};
 
 #[derive(Debug, Serialize, Tsify)]
 #[tsify(into_wasm_abi)]
@@ -18,19 +18,19 @@ pub enum GraphError {
     },
     PortNotFound {
         node_id: NodeId,
-        port: usize,
+        port: PortIndex,
         port_type: PortType,
     },
     PortAlreadyConnected {
         node_id: NodeId,
-        port: usize,
+        port: PortIndex,
         port_type: PortType,
     },
     ImpossibleConnection {
         from_node_id: NodeId,
-        from_port: usize,
+        from_port: PortIndex,
         to_node_id: NodeId,
-        to_port: usize,
+        to_port: PortIndex,
     },
     InvalidPortKey {
         key: String,

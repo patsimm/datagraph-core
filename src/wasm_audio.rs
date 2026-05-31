@@ -6,7 +6,7 @@ use web_sys::{AudioContext, AudioWorkletNode, AudioWorkletNodeOptions, MessageEv
 use crate::{
     command_queue::{apply_command, GraphCommand},
     event_queue::SharedPort,
-    graph::{BatchTickable, Graph, PortInfo},
+    graph::{BatchTickable, Graph, PortInfo, PortKey},
     latest_value::LatestValueWriter,
     node_data::NodeDataWriter,
     nodes::NodeRegistry,
@@ -26,6 +26,8 @@ pub struct WasmAudioProcessor {
     state: Rc<RefCell<GraphState>>,
     port: SharedPort,
     _onmessage: Option<Closure<dyn FnMut(MessageEvent)>>,
+    output_ports: Vec<PortKey>,
+    nd_version: u64,
 }
 
 impl WasmAudioProcessor {
@@ -34,6 +36,8 @@ impl WasmAudioProcessor {
             state,
             port,
             _onmessage: None,
+            output_ports: Vec::new(),
+            nd_version: u64::MAX,
         }
     }
 }
@@ -44,11 +48,16 @@ impl WasmAudioProcessor {
         let mut guard = self.state.borrow_mut();
         let s = &mut *guard;
 
-        let nd_ports = s.nd_writer.subscribed_ports();
-        let mut output_ports = vec![s.output_port.key()];
-        output_ports.extend(nd_ports.iter());
+        let v = s.nd_writer.version();
+        if v != self.nd_version || self.output_ports.is_empty() {
+            self.output_ports.clear();
+            self.output_ports.push(*s.output_port.key());
+            self.output_ports
+                .extend(s.nd_writer.subscriptions().iter().map(|(p, _)| *p));
+            self.nd_version = v;
+        }
 
-        let mut out = s.graph.tick_batch(&output_ports, buf.len());
+        let mut out = s.graph.tick_batch(&self.output_ports, buf.len());
         let first = out.next().unwrap_or(&[]);
         let len = first.len().min(buf.len());
         buf[..len].copy_from_slice(&first[..len]);

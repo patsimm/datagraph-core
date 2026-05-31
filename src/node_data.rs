@@ -33,6 +33,7 @@ pub struct NodeDataWriter {
     subscriptions: Vec<(PortKey, usize)>,
     accumulators: Vec<Box<[f32]>>,
     accumulator_pos: Vec<usize>,
+    version: u64,
 }
 
 pub struct NodeDataReader {
@@ -49,6 +50,7 @@ pub fn node_data_channel() -> (NodeDataWriter, NodeDataReader) {
                 .map(|_| vec![0.0_f32; BUFFER_SIZE].into_boxed_slice())
                 .collect(),
             accumulator_pos: vec![0; MAX_SUBSCRIPTIONS],
+            version: 0,
         },
         NodeDataReader { buffer: buf },
     )
@@ -59,15 +61,21 @@ impl NodeDataWriter {
         self.subscriptions.retain(|(_, i)| *i != index);
         self.subscriptions.push((port, index));
         self.accumulator_pos[index] = 0;
+        self.version = self.version.wrapping_add(1);
     }
 
     pub fn unsubscribe(&mut self, index: usize) {
         self.subscriptions.retain(|(_, i)| *i != index);
         self.accumulator_pos[index] = 0;
+        self.version = self.version.wrapping_add(1);
     }
 
-    pub fn subscribed_ports(&self) -> Vec<PortKey> {
-        self.subscriptions.iter().map(|(p, _)| *p).collect()
+    pub fn subscriptions(&self) -> &[(PortKey, usize)] {
+        &self.subscriptions
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version
     }
 
     pub fn write_batches<'a>(&mut self, batches: impl Iterator<Item = &'a [f32]>) {

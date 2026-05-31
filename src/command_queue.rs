@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 
 use crate::{
-    graph::{Graph, NodeId, PortKey},
+    graph::{Graph, NodeId, PortIndex, PortKey},
     latest_value::LatestValueWriter,
     node_data::NodeDataWriter,
     nodes::NodeRegistry,
@@ -22,15 +22,15 @@ pub enum GraphCommand {
     RemoveNode(NodeId),
     Connect {
         from: NodeId,
-        from_port: usize,
+        from_port: PortIndex,
         to: NodeId,
-        to_port: usize,
+        to_port: PortIndex,
     },
     Disconnect {
         from: NodeId,
-        from_port: usize,
+        from_port: PortIndex,
         to: NodeId,
-        to_port: usize,
+        to_port: PortIndex,
     },
     SetParamValue {
         id: NodeId,
@@ -38,7 +38,7 @@ pub enum GraphCommand {
     },
     SetDefaultInputValue {
         id: NodeId,
-        port: usize,
+        port: PortIndex,
         value: f32,
     },
     SubscribeLatestValue {

@@ -13,4 +13,4 @@ pub use graph::{BatchTickable, Graph, PortValueAccess, Tickable};
 pub use node::{CreateNode, DynNode, GraphNode, Node, NodeInfo, NodeMeta};
 pub use node_id::NodeId;
 pub use param::{Param, ParamHandle};
-pub use port::{PortInfo, PortKey, PortType};
+pub use port::{PortIndex, PortInfo, PortKey, PortType};

@@ -1,8 +1,8 @@
-use super::NodeId;
+use super::port::PortIndex;
 
 pub(super) struct Connection {
-    pub(super) from: NodeId,
-    pub(super) from_port: usize,
-    pub(super) to: NodeId,
-    pub(super) to_port: usize,
+    pub(super) from_idx: usize,
+    pub(super) from_port: PortIndex,
+    pub(super) to_idx: usize,
+    pub(super) to_port: PortIndex,
 }
